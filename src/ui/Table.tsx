@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { evaluateBest, describeHand } from '../engine/evaluator';
 import { legalActions, potTotal } from '../engine/holdem';
-import { HERO_ID, useCashGame, type CashGameOptions } from '../game/useCashGame';
+import { avatarFor, HERO_ID, useCashGame, type CashGameOptions } from '../game/useCashGame';
 import { CardView } from './CardView';
 import { useDecisionTimer } from '../game/timer';
 
@@ -59,6 +59,7 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
                   </div>
                 )}
                 <div className="plate">
+                  {avatarFor(p.name) ? <img className="avatar" src={avatarFor(p.name)!} alt="" /> : <div className="avatar me">♠</div>}
                   <div className="name">{p.name}{hand!.config.buttonIndex === i && <span className="dealer">D</span>}</div>
                   <div className="stack">{p.stack}</div>
                 </div>

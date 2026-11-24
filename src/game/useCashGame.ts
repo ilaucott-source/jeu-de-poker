@@ -4,7 +4,22 @@ import type { TimerPreset } from './timer';
 import { applyAction, startHand, stacksAfter, type BettingStructure, type HandState, type PlayerAction, type SeatInput } from '../engine/holdem';
 
 export const HERO_ID = 'hero';
-const BOT_NAMES = ['Le Débutant', 'La Prudente', 'Le Fêtard', 'La Calculatrice', 'Le Cow-boy'];
+export const BOTS = [
+  { name: 'Le Débutant', avatar: 'debutant' },
+  { name: 'La Prudente', avatar: 'prudente' },
+  { name: 'Le Fêtard', avatar: 'fetard' },
+  { name: 'La Calculatrice', avatar: 'calculatrice' },
+  { name: 'Le Cow-boy', avatar: 'cowboy' },
+  { name: 'Le Requin', avatar: 'requin' },
+  { name: 'La Pro', avatar: 'pro' },
+  { name: 'Le Mystère', avatar: 'mystere' },
+  { name: 'Le Vétéran', avatar: 'veteran' },
+];
+const BOT_NAMES = BOTS.map((b) => b.name);
+export const avatarFor = (name: string) => {
+  const b = BOTS.find((x) => x.name === name);
+  return b ? `./img/avatars/${b.avatar}.webp` : null;
+};
 
 export interface CashGameOptions {
   structure: BettingStructure;

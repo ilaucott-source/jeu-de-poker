@@ -82,3 +82,22 @@ select { font: inherit; padding: 8px; border-radius: 8px; background: #13211b; c
 .timer.bank .timer-fill { background: linear-gradient(90deg, #3d5f9e, #6f95d8); }
 @keyframes pulse { 50% { box-shadow: 0 0 12px #c8323c; } }
 @media (prefers-reduced-motion: reduce) { .timer.urgent { animation: none; } .card { animation: none; } }
+
+/* visuels Higgsfield */
+.menu-screen { min-height: 100dvh; background: linear-gradient(180deg, #07110dcc 0%, #07110d55 40%, #07110dee 100%), url('/img/lobby-wide.webp') center / cover no-repeat; display: flex; align-items: center; }
+@media (orientation: portrait) { .menu-screen { background-image: linear-gradient(180deg, #07110d88 0%, #07110d33 40%, #07110dee 100%), url('/img/lobby-tall.webp'); } }
+.menu { background: #07110dcc; backdrop-filter: blur(6px); border: 1px solid #d4af6a44; border-radius: 20px; margin-block: 24px; }
+.table-screen { background: linear-gradient(#07110dd9, #07110dd9), url('/img/lobby-wide.webp') center / cover no-repeat; }
+.plate { position: relative; padding-left: 46px; text-align: left; }
+.plate .avatar { position: absolute; left: 4px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--gold); object-fit: cover; background: var(--felt-dark); }
+.plate .avatar.me { display: flex; align-items: center; justify-content: center; color: var(--gold); font-size: 1.1rem; }
+.seat.active .plate .avatar { box-shadow: 0 0 10px var(--gold); }
+@media (max-width: 600px) {
+  .plate { padding: 2px 6px 2px 30px; min-width: 0; max-width: 96px; }
+  .plate .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: .7rem; }
+  .plate .avatar { width: 24px; height: 24px; left: 3px; }
+  .n6 .pos1, .n6 .pos2, .n5 .pos1, .n4 .pos1 { left: 17%; }
+  .n6 .pos4, .n6 .pos5, .n5 .pos4, .n4 .pos3 { left: 83%; }
+  .n3 .pos1 { left: 22%; } .n3 .pos2 { left: 78%; }
+  .topbar { font-size: .75rem; gap: 8px; }
+}

@@ -11,7 +11,7 @@ export default function App() {
   if (playing) return <Table options={opts} onQuit={() => setPlaying(false)} />;
 
   return (
-    <div className="menu">
+    <div className="menu-screen"><div className="menu">
       <h1>♠ Jeu de Poker</h1>
       <p className="sub">Texas Hold'em · Cash game</p>
       <label>
@@ -37,6 +37,6 @@ export default function App() {
       <p className="note">{TIMER_PRESETS[opts.timer].hint} Si le temps est écoulé, une banque de temps prend le relais, puis tu passes parole ou tu te couches automatiquement.</p>
       <button className="primary big" onClick={() => setPlaying(true)}>Jouer</button>
       <p className="note">Version de travail : moteur de règles complet, bots simples. Le style définitif arrive à l'étape 4.</p>
-    </div>
+    </div></div>
   );
 }
