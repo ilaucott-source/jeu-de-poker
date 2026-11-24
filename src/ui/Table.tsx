@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { evaluateBest, describeHand } from '../engine/evaluator';
 import { legalActions, potTotal } from '../engine/holdem';
 import { avatarFor, HERO_ID, useCashGame, type CashGameOptions } from '../game/useCashGame';
 import { CardView } from './CardView';
 import { useDecisionTimer } from '../game/timer';
+import { BetPanel } from './BetPanel';
+import { isMuted, playCheck, playChips, playDeal, playFold, playWin, setMuted, unlockAudio } from '../game/sound';
 
 const STRUCTURE_FR = { NL: 'No Limit', PL: 'Pot Limit', FL: 'Limit' };
 const ACTION_FR: Record<string, string> = { fold: 'Couché', check: 'Parole', call: 'Suit', bet: 'Mise', raise: 'Relance', post: 'Blind' };
@@ -12,7 +14,7 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
   const { hand, handNo, deal, act, rebuy, heroStack } = useCashGame(options);
   const legal = hand ? legalActions(hand) : null;
   const heroTurn = hand?.toAct !== null && hand?.players[hand.toAct!]?.id === HERO_ID;
-  const [raiseTo, setRaiseTo] = useState(0);
+  const [muted, setMutedState] = useState(isMuted());
   const bb = options.bigBlind;
 
   const lastAction = useMemo(() => {
@@ -24,17 +26,39 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
 
   const hero = hand?.players.find((p) => p.id === HERO_ID);
   const heroHand = hero && hand && hand.board.length >= 3 && !hero.folded ? describeHand(evaluateBest([...hero.holeCards, ...hand.board])) : null;
-  const value = legal ? Math.min(Math.max(raiseTo || legal.minTo, legal.minTo), legal.maxTo) : 0;
   const done = !hand || hand.street === 'complete';
   const timer = useDecisionTimer(options.timer, !!heroTurn && !done, `${handNo}-${hand?.log.length ?? 0}`, handNo, () => {
     const l = hand ? legalActions(hand) : null;
     if (!l) return;
     act(l.canCheck ? { type: 'check' } : { type: 'fold' });
-    setRaiseTo(0);
   });
 
+  // Sons : on joue chaque nouvelle action du journal
+  const heard = useRef({ hand: -1, count: 0, won: false });
+  useEffect(() => {
+    if (!hand) return;
+    const h = heard.current;
+    if (h.hand !== handNo) {
+      heard.current = { hand: handNo, count: 0, won: false };
+      playDeal();
+    }
+    const fresh = hand.log.slice(heard.current.count);
+    heard.current.count = hand.log.length;
+    const last = fresh.filter((a) => a.type !== 'post').pop();
+    if (fresh.some((a) => a.type === 'post') && !last) playChips(2);
+    if (last) {
+      if (last.type === 'fold') playFold();
+      else if (last.type === 'check') playCheck();
+      else playChips(2 + Math.round(Math.log2(1 + last.amount / bb)));
+    }
+    if (hand.street === 'complete' && !heard.current.won) {
+      heard.current.won = true;
+      setTimeout(playWin, 450);
+    }
+  }, [hand, handNo, bb]);
+
   return (
-    <div className="table-screen">
+    <div className="table-screen" onPointerDown={unlockAudio}>
       <div className="rotate-hint" role="alert">
         <div className="phone" aria-hidden="true" />
         <p>Tourne ton téléphone pour jouer</p>
@@ -43,7 +67,12 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
       <header className="topbar">
         <button className="ghost" onClick={onQuit}>← Menu</button>
         <span>Cash game · {STRUCTURE_FR[options.structure]} · {bb / 2}/{bb}</span>
-        <span>Main n°{handNo}{timer.enabled && <> · Banque {Math.ceil(timer.bank)} s</>}</span>
+        <span className="top-right">
+          Main n°{handNo}{timer.enabled && <> · Banque {Math.ceil(timer.bank)} s</>}
+          <button className="ghost sound" aria-label={muted ? 'Activer le son' : 'Couper le son'} onClick={() => { setMuted(!muted); setMutedState(!muted); }}>
+            {muted ? '🔇' : '🔊'}
+          </button>
+        </span>
       </header>
 
       <div className="felt">
@@ -55,7 +84,7 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
             return (
               <div key={p.id} className={`seat pos${i} ${p.folded ? 'folded' : ''} ${hand!.toAct === i ? 'active' : ''} ${isHero ? 'hero' : ''}`}>
                 <div className="hole">
-                  {p.holeCards.map((c, k) => <CardView key={k} card={c} hidden={!reveal} small={!isHero} />)}
+                  {p.holeCards.map((c, k) => <CardView key={`${handNo}-${k}`} card={c} hidden={!reveal} size={isHero ? 'lg' : 'sm'} delay={k * 120} />)}
                 </div>
                 {isHero && heroTurn && timer.enabled && (
                   <div className={`timer ${timer.urgent ? 'urgent' : ''} ${timer.usingBank ? 'bank' : ''}`}>
@@ -77,7 +106,7 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
         </div>
         <div className="center">
           <div className="board">
-            {[0, 1, 2, 3, 4].map((k) => (hand?.board[k] ? <CardView key={k} card={hand.board[k]} /> : <div key={k} className="card slot" />))}
+            {[0, 1, 2, 3, 4].map((k) => (hand?.board[k] ? <CardView key={`${handNo}-b${k}`} card={hand.board[k]} size="md" delay={k < 3 ? k * 90 : 0} /> : <div key={k} className="card slot md" />))}
           </div>
           {hand && !done && <div className="pot">Pot : {potTotal(hand)}</div>}
           {hand?.showdown && hero && hand.showdown[HERO_ID] && <div className="pot">Ta main : {describeHand(hand.showdown[HERO_ID])}</div>}
@@ -93,24 +122,7 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
             <button className="primary" onClick={deal}>{hand ? 'Main suivante' : 'Distribuer'}</button>
           )
         ) : heroTurn && legal ? (
-          <>
-            {legal.canFold && <button onClick={() => act({ type: 'fold' })}>Se coucher</button>}
-            {legal.canCheck ? (
-              <button onClick={() => act({ type: 'check' })}>Parole</button>
-            ) : (
-              <button onClick={() => act({ type: 'call' })}>Suivre {legal.callAmount}</button>
-            )}
-            {legal.canBetOrRaise && (
-              <div className="raise">
-                {legal.maxTo > legal.minTo && (
-                  <input type="range" min={legal.minTo} max={legal.maxTo} step={1} value={value} onChange={(e) => setRaiseTo(Number(e.target.value))} />
-                )}
-                <button className="primary" onClick={() => { act({ type: legal.isBet ? 'bet' : 'raise', to: value }); setRaiseTo(0); }}>
-                  {legal.isBet ? 'Miser' : 'Relancer à'} {value}{value === hero!.stack + hero!.bet ? ' (tapis)' : ''}
-                </button>
-              </div>
-            )}
-          </>
+          <BetPanel hand={hand!} legal={legal} allIn={hero!.stack + hero!.bet} onAct={act} />
         ) : (
           <span className="waiting">Les adversaires réfléchissent…</span>
         )}
