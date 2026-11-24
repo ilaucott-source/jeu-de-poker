@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { simpleBot } from '../engine/bot';
+import type { TimerPreset } from './timer';
 import { applyAction, startHand, stacksAfter, type BettingStructure, type HandState, type PlayerAction, type SeatInput } from '../engine/holdem';
 
 export const HERO_ID = 'hero';
@@ -11,6 +12,7 @@ export interface CashGameOptions {
   /** Tapis de départ en grosses blinds. */
   buyInBB: number;
   bots: number;
+  timer: TimerPreset;
 }
 
 export function useCashGame(opts: CashGameOptions) {

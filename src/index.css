@@ -72,3 +72,13 @@ select { font: inherit; padding: 8px; border-radius: 8px; background: #13211b; c
   .seat .hole { height: 40px; } .seat.hero .hole { height: 58px; }
   .plate { min-width: 70px; padding: 2px 6px; }
 }
+
+/* compte à rebours du joueur */
+.timer { position: relative; width: 120px; height: 18px; border-radius: 9px; background: #000a; overflow: hidden; font-size: .7rem; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.timer span { position: relative; }
+.timer-fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #b48a3e, var(--gold)); transition: width .1s linear; }
+.timer.urgent .timer-fill { background: linear-gradient(90deg, #8e1f27, var(--red)); }
+.timer.urgent { animation: pulse 1s ease-in-out infinite; }
+.timer.bank .timer-fill { background: linear-gradient(90deg, #3d5f9e, #6f95d8); }
+@keyframes pulse { 50% { box-shadow: 0 0 12px #c8323c; } }
+@media (prefers-reduced-motion: reduce) { .timer.urgent { animation: none; } .card { animation: none; } }

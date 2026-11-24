@@ -3,6 +3,7 @@ import { evaluateBest, describeHand } from '../engine/evaluator';
 import { legalActions, potTotal } from '../engine/holdem';
 import { HERO_ID, useCashGame, type CashGameOptions } from '../game/useCashGame';
 import { CardView } from './CardView';
+import { useDecisionTimer } from '../game/timer';
 
 const STRUCTURE_FR = { NL: 'No Limit', PL: 'Pot Limit', FL: 'Limit' };
 const ACTION_FR: Record<string, string> = { fold: 'Couché', check: 'Parole', call: 'Suit', bet: 'Mise', raise: 'Relance', post: 'Blind' };
@@ -25,13 +26,19 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
   const heroHand = hero && hand && hand.board.length >= 3 && !hero.folded ? describeHand(evaluateBest([...hero.holeCards, ...hand.board])) : null;
   const value = legal ? Math.min(Math.max(raiseTo || legal.minTo, legal.minTo), legal.maxTo) : 0;
   const done = !hand || hand.street === 'complete';
+  const timer = useDecisionTimer(options.timer, !!heroTurn && !done, `${handNo}-${hand?.log.length ?? 0}`, handNo, () => {
+    const l = hand ? legalActions(hand) : null;
+    if (!l) return;
+    act(l.canCheck ? { type: 'check' } : { type: 'fold' });
+    setRaiseTo(0);
+  });
 
   return (
     <div className="table-screen">
       <header className="topbar">
         <button className="ghost" onClick={onQuit}>← Menu</button>
         <span>Cash game · {STRUCTURE_FR[options.structure]} · {bb / 2}/{bb}</span>
-        <span>Main n°{handNo}</span>
+        <span>Main n°{handNo}{timer.enabled && <> · Banque {Math.ceil(timer.bank)} s</>}</span>
       </header>
 
       <div className="felt">
@@ -45,6 +52,12 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
                 <div className="hole">
                   {p.holeCards.map((c, k) => <CardView key={k} card={c} hidden={!reveal} small={!isHero} />)}
                 </div>
+                {isHero && heroTurn && timer.enabled && (
+                  <div className={`timer ${timer.urgent ? 'urgent' : ''} ${timer.usingBank ? 'bank' : ''}`}>
+                    <div className="timer-fill" style={{ width: `${timer.fraction * 100}%` }} />
+                    <span>{timer.usingBank ? 'Banque ' : ''}{Math.ceil(timer.remaining)} s</span>
+                  </div>
+                )}
                 <div className="plate">
                   <div className="name">{p.name}{hand!.config.buttonIndex === i && <span className="dealer">D</span>}</div>
                   <div className="stack">{p.stack}</div>
