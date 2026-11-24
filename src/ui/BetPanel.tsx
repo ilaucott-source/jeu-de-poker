@@ -7,9 +7,11 @@ interface Props {
   legal: LegalActions;
   allIn: number;
   onAct: (a: PlayerAction) => void;
+  /** prévient quand le montant de relance choisi change (pour les statistiques) */
+  onAmount?: (to: number | null) => void;
 }
 
-export function BetPanel({ hand, legal, allIn, onAct }: Props) {
+export function BetPanel({ hand, legal, allIn, onAct, onAmount }: Props) {
   const [amount, setAmount] = useState(legal.minTo);
   const key = `${hand.log.length}-${legal.minTo}-${legal.maxTo}`;
   useEffect(() => setAmount(legal.minTo), [key, legal.minTo]);
@@ -18,6 +20,10 @@ export function BetPanel({ hand, legal, allIn, onAct }: Props) {
   const step = hand.config.bigBlind;
   const v = Math.min(Math.max(amount, legal.minTo), legal.maxTo);
   const ranged = legal.canBetOrRaise && legal.maxTo > legal.minTo;
+  useEffect(() => {
+    onAmount?.(legal.canBetOrRaise ? v : null);
+  }, [v, legal.canBetOrRaise, onAmount]);
+  useEffect(() => () => onAmount?.(null), [onAmount]);
   const bump = (d: number) => setAmount(Math.min(legal.maxTo, Math.max(legal.minTo, Math.round((v + d) / step) * step || v + d)));
 
   return (
@@ -51,9 +57,9 @@ export function BetPanel({ hand, legal, allIn, onAct }: Props) {
       <div className="main-actions">
         {legal.canFold && <button className="act fold" onClick={() => onAct({ type: 'fold' })}>Se coucher</button>}
         {legal.canCheck ? (
-          <button className="act" onClick={() => onAct({ type: 'check' })}>Parole</button>
+          <button className="act call" onClick={() => onAct({ type: 'check' })}>Parole</button>
         ) : (
-          <button className="act" onClick={() => onAct({ type: 'call' })}>Suivre {legal.callAmount}</button>
+          <button className="act call" onClick={() => onAct({ type: 'call' })}>Suivre {legal.callAmount}</button>
         )}
         {legal.canBetOrRaise && (
           <button className="act primary" onClick={() => onAct({ type: legal.isBet ? 'bet' : 'raise', to: v })}>

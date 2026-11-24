@@ -37,15 +37,18 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
   };
   const bb = options.bigBlind;
 
+  const [raiseTo, setRaiseTo] = useState<number | null>(null);
   const lastAction = useMemo(() => {
     const m: Record<string, string> = {};
-    if (!hand) return m;
+    const kind: Record<string, string> = {};
+    if (!hand) return { text: m, kind };
     for (const a of hand.log) {
       if (a.street !== hand.street && hand.street !== 'complete') continue;
       if (a.type === 'post') m[a.playerId] = a.label === 'petite blind' ? `SB ${a.amount}` : a.label === 'grosse blind' ? `BB ${a.amount}` : `Ante ${a.amount}`;
       else m[a.playerId] = ACTION_FR[a.type] + (a.amount ? ` ${a.amount}` : '');
+      kind[a.playerId] = a.type;
     }
-    return m;
+    return { text: m, kind };
   }, [hand]);
 
   const hero = hand?.players.find((p) => p.id === HERO_ID);
@@ -134,26 +137,32 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
   const nSeats = hand?.players.length ?? options.bots + 1;
 
   return (
-    <div className="table-screen" onPointerDown={unlockAudio}>
+    <div className={`table-screen ${showOdds ? 'with-stats' : ''}`} onPointerDown={unlockAudio}>
       <div className="rotate-hint" role="alert">
         <div className="phone" aria-hidden="true" />
         <p>Tourne ton téléphone pour jouer</p>
         <small>La table s'affiche en paysage.</small>
       </div>
       <header className="topbar">
-        <button className="ghost" onClick={onQuit}>← Menu</button>
-        <span>Cash game · {STRUCTURE_FR[options.structure]} · {bb / 2}/{bb}</span>
+        <button className="pill" onClick={onQuit}>‹ Menu</button>
+        <span className="title">
+          <b>{STRUCTURE_FR[options.structure]}</b> · Blinds {bb / 2}/{bb} · Main n°{handNo}
+          {timer.enabled && <span className="bank"> · Banque {Math.ceil(timer.bank)} s</span>}
+        </span>
         <span className="top-right">
-          <button className={`ghost stats-btn ${showOdds ? 'on' : ''}`} onClick={toggleOdds} aria-pressed={showOdds}>
-            📊 Stats
+          <button className={`pill stats-btn ${showOdds ? 'on' : ''}`} onClick={toggleOdds} aria-pressed={showOdds}>
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 14V9h3v5zm4.5 0V5h3v9zM11 14V2h3v12z" fill="currentColor" /></svg>
+            Stats
           </button>
-          Main n°{handNo}{timer.enabled && <> · Banque {Math.ceil(timer.bank)} s</>}
-          <button className="ghost sound" aria-label={muted ? 'Activer le son' : 'Couper le son'} onClick={() => { setMuted(!muted); setMutedState(!muted); }}>
+          <button className="pill icon" aria-label={muted ? 'Activer le son' : 'Couper le son'} onClick={() => { setMuted(!muted); setMutedState(!muted); }}>
             {muted ? '🔇' : '🔊'}
           </button>
         </span>
       </header>
 
+      <main className="stage">
+      {showOdds && (hand ? <OddsPanel hand={hand} heroId={HERO_ID} raiseTo={heroTurn ? raiseTo : null} onClose={toggleOdds} /> : <aside className="odds-panel"><p className="muted">Distribue une main pour voir tes statistiques.</p></aside>)}
+      <div className="rail">
       <div className="felt" ref={feltRef}>
         <div className={`seats n${(hand?.players.length ?? options.bots + 1)}`}>
           {(hand?.players ?? []).map((p, i) => {
@@ -186,13 +195,12 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
                 </div>
                 </div>
                 {p.allIn && !p.folded && <div className="last allin-tag">TAPIS</div>}
-                {lastAction[p.id] && !won && <div className="last">{lastAction[p.id]}</div>}
+                {lastAction.text[p.id] && !won && !(p.allIn && !p.folded) && <div className={`last k-${lastAction.kind[p.id]}`}>{lastAction.text[p.id]}</div>}
                 {won > 0 && <div className="last win">+{won}</div>}
               </div>
             );
           })}
         </div>
-        {showOdds && hand && hand.street !== 'complete' && <OddsPanel hand={hand} heroId={HERO_ID} onClose={toggleOdds} />}
         <div className="bets-layer">
           {(hand?.players ?? []).map((p, i) =>
             p.bet > 0 ? (
@@ -209,13 +217,16 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
           </div>
           <div className="pot-row">
             <div className="pot-chips" ref={potRef}>{collected > 0 && <ChipStack amount={collected} unit={unit} small={compact} />}</div>
-            {hand && !done && <div className="pot">Pot : {potTotal(hand)}</div>}
+            {hand && !done && <div className="pot"><small>Pot</small> {potTotal(hand)}</div>}
             {hand && !done && <div className="inplay">{hand.players.filter((p) => !p.folded && !p.out).length} en jeu</div>}
           </div>
           {hand?.showdown && hero && hand.showdown[HERO_ID] && <div className="pot">Ta main : {describeHand(hand.showdown[HERO_ID])}</div>}
           {!hand?.showdown && heroHand && <div className="pot hint">Ta main : {heroHand}</div>}
         </div>
       </div>
+
+      </div>
+      </main>
 
       <footer className="actions">
         {done ? (
@@ -225,7 +236,7 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
             <button className="primary" onClick={deal}>{hand ? 'Main suivante' : 'Distribuer'}</button>
           )
         ) : heroTurn && legal ? (
-          <BetPanel hand={hand!} legal={legal} allIn={hero!.stack + hero!.bet} onAct={act} />
+          <BetPanel hand={hand!} legal={legal} allIn={hero!.stack + hero!.bet} onAct={act} onAmount={setRaiseTo} />
         ) : (
           <span className="waiting">Les adversaires réfléchissent…</span>
         )}
