@@ -1,0 +1,10 @@
+{
+  "name": "Jeu de Poker",
+  "short_name": "Poker",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#07110d",
+  "theme_color": "#07110d",
+  "lang": "fr"
+}

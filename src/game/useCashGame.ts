@@ -1,0 +1,65 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { simpleBot } from '../engine/bot';
+import { applyAction, startHand, stacksAfter, type BettingStructure, type HandState, type PlayerAction, type SeatInput } from '../engine/holdem';
+
+export const HERO_ID = 'hero';
+const BOT_NAMES = ['Le Débutant', 'La Prudente', 'Le Fêtard', 'La Calculatrice', 'Le Cow-boy'];
+
+export interface CashGameOptions {
+  structure: BettingStructure;
+  bigBlind: number;
+  /** Tapis de départ en grosses blinds. */
+  buyInBB: number;
+  bots: number;
+}
+
+export function useCashGame(opts: CashGameOptions) {
+  const [hand, setHand] = useState<HandState | null>(null);
+  const [handNo, setHandNo] = useState(0);
+  const seatsRef = useRef<SeatInput[]>([
+    { id: HERO_ID, name: 'Toi', stack: opts.buyInBB * opts.bigBlind },
+    ...BOT_NAMES.slice(0, opts.bots).map((name, i) => ({ id: `bot${i}`, name, stack: opts.buyInBB * opts.bigBlind })),
+  ]);
+  const buttonRef = useRef(Math.floor(Math.random() * (opts.bots + 1)));
+
+  const deal = useCallback(() => {
+    // En cash game, un bot à court de jetons se recave automatiquement
+    seatsRef.current = seatsRef.current.map((s) =>
+      s.id !== HERO_ID && s.stack < opts.bigBlind * 10 ? { ...s, stack: opts.buyInBB * opts.bigBlind } : s,
+    );
+    const n = seatsRef.current.length;
+    buttonRef.current = (buttonRef.current + 1) % n;
+    const h = startHand(seatsRef.current, {
+      structure: opts.structure,
+      smallBlind: opts.bigBlind / 2,
+      bigBlind: opts.bigBlind,
+      buttonIndex: buttonRef.current,
+      seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0,
+    });
+    setHand(h);
+    setHandNo((x) => x + 1);
+  }, [opts.bigBlind, opts.buyInBB, opts.structure]);
+
+  const act = useCallback((a: PlayerAction) => {
+    setHand((h) => (h ? applyAction(h, a) : h));
+  }, []);
+
+  const rebuy = useCallback(() => {
+    seatsRef.current = seatsRef.current.map((s) => (s.id === HERO_ID ? { ...s, stack: opts.buyInBB * opts.bigBlind } : s));
+  }, [opts.bigBlind, opts.buyInBB]);
+
+  // Les bots jouent avec un petit délai pour que l'action reste lisible
+  useEffect(() => {
+    if (!hand || hand.toAct === null) return;
+    const p = hand.players[hand.toAct];
+    if (p.id === HERO_ID) return;
+    const t = setTimeout(() => setHand((h) => (h && h.toAct !== null ? applyAction(h, simpleBot(h)) : h)), 700 + Math.random() * 600);
+    return () => clearTimeout(t);
+  }, [hand]);
+
+  useEffect(() => {
+    if (hand?.street === 'complete') seatsRef.current = stacksAfter(hand);
+  }, [hand]);
+
+  return { hand, handNo, deal, act, rebuy, heroStack: seatsRef.current.find((s) => s.id === HERO_ID)!.stack };
+}
