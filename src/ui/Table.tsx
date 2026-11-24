@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { evaluateBest, describeHand } from '../engine/evaluator';
 import { legalActions, potTotal } from '../engine/holdem';
 import { avatarFor, HERO_ID, useCashGame, type CashGameOptions } from '../game/useCashGame';
 import { CardView } from './CardView';
 import { useDecisionTimer } from '../game/timer';
 import { BetPanel } from './BetPanel';
+import { ChipStack, FlyingChips, type Flight } from './chips';
+import { betPos, isCompactLandscape, seatPos } from './layout';
 import { isMuted, playBoard, playChips, playDeal, playFold, playWin, setMuted, unlockAudio } from '../game/sound';
 
 const STRUCTURE_FR = { NL: 'No Limit', PL: 'Pot Limit', FL: 'Limit' };
@@ -60,9 +62,57 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
     heard.current.board = hand.board.length;
     if (hand.street === 'complete' && !heard.current.won) {
       heard.current.won = true;
-      setTimeout(playWin, 450);
+      setTimeout(playWin, 1050);
     }
   }, [hand, handNo, bb]);
+
+  // Disposition (bureau ou téléphone en paysage)
+  const [compact, setCompact] = useState(isCompactLandscape());
+  useEffect(() => {
+    const mq = window.matchMedia('(orientation: landscape) and (max-height: 520px)');
+    const on = () => setCompact(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+
+  // Position réelle du pot sur le tapis, pour viser les jetons
+  const feltRef = useRef<HTMLDivElement>(null);
+  const potRef = useRef<HTMLDivElement>(null);
+  const potAt = useRef<[number, number]>([50, 55]);
+  useLayoutEffect(() => {
+    const f = feltRef.current?.getBoundingClientRect();
+    const p = potRef.current?.getBoundingClientRect();
+    if (f && p && f.width) potAt.current = [((p.left + p.width / 2 - f.left) / f.width) * 100, ((p.top + p.height / 2 - f.top) / f.height) * 100];
+  });
+
+  // Jetons en mouvement : mises ramassées au centre, puis pot envoyé au gagnant
+  const [flights, setFlights] = useState<Flight[]>([]);
+  const flightId = useRef(0);
+  const prevHand = useRef<{ no: number; street: string; bets: number[] } | null>(null);
+  useEffect(() => {
+    if (!hand) return;
+    const n = hand.players.length;
+    const prev = prevHand.current;
+    const add: Flight[] = [];
+    if (prev && prev.no === handNo && prev.street !== hand.street) {
+      prev.bets.forEach((b, i) => {
+        if (b > 0) add.push({ id: ++flightId.current, amount: b, from: betPos(n, i, compact), to: potAt.current, delay: 0 });
+      });
+      if (hand.street === 'complete' && hand.results) {
+        for (const r of hand.results)
+          for (const [id, amt] of Object.entries(r.shares)) {
+            const i = hand.players.findIndex((p) => p.id === id);
+            add.push({ id: ++flightId.current, amount: amt, from: potAt.current, to: seatPos(n, i, compact), delay: add.length ? 550 : 250 });
+          }
+      }
+    }
+    prevHand.current = { no: handNo, street: hand.street, bets: hand.players.map((p) => p.bet) };
+    if (add.length) setFlights((f) => [...f, ...add]);
+  }, [hand, handNo, compact]);
+  const landed = useCallback((id: number) => setFlights((f) => f.filter((x) => x.id !== id)), []);
+  const unit = options.bigBlind / 2;
+  const collected = hand && !done ? hand.players.reduce((s, p) => s + p.committed - p.bet, 0) : 0;
+  const nSeats = hand?.players.length ?? options.bots + 1;
 
   return (
     <div className="table-screen" onPointerDown={unlockAudio}>
@@ -82,14 +132,14 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
         </span>
       </header>
 
-      <div className="felt">
+      <div className="felt" ref={feltRef}>
         <div className={`seats n${(hand?.players.length ?? options.bots + 1)}`}>
           {(hand?.players ?? []).map((p, i) => {
             const isHero = p.id === HERO_ID;
             const reveal = isHero || (hand!.showdown && hand!.showdown[p.id]);
             const won = hand!.results?.reduce((s, r) => s + (r.shares[p.id] ?? 0), 0) ?? 0;
             return (
-              <div key={p.id} className={`seat pos${i} ${p.folded ? 'folded' : ''} ${hand!.toAct === i ? 'active' : ''} ${isHero ? 'hero' : ''}`}>
+              <div key={p.id} style={{ left: `${seatPos(nSeats, i, compact)[0]}%`, top: `${seatPos(nSeats, i, compact)[1]}%` }} className={`seat pos${i} ${seatPos(nSeats, i, compact)[0] > 50 ? 'right' : seatPos(nSeats, i, compact)[0] < 50 ? 'left' : 'mid'} ${p.folded ? 'folded' : ''} ${hand!.toAct === i ? 'active' : ''} ${isHero ? 'hero' : ''}`}>
                 <div className="hole">
                   {p.holeCards.map((c, k) => <CardView key={`${handNo}-${k}`} card={c} hidden={!reveal} size={isHero ? 'lg' : 'sm'} delay={k * 120} />)}
                 </div>
@@ -99,6 +149,8 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
                     <span>{timer.usingBank ? 'Banque ' : ''}{Math.ceil(timer.remaining)} s</span>
                   </div>
                 )}
+                <div className="plate-row">
+                <ChipStack amount={p.stack} unit={unit} mode="stack" small={compact} />
                 <div className="plate">
                   {avatarFor(p.name) ? <img className="avatar" src={avatarFor(p.name)!} alt="" /> : <div className="avatar me">♠</div>}
                   <div className="name">{p.name}</div>
@@ -109,18 +161,31 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
                   {hand!.bbIndex === i && <span className="marker bb" title="Grosse blind">BB</span>}
                 </div>
                 </div>
+                </div>
                 {lastAction[p.id] && !won && <div className="last">{lastAction[p.id]}</div>}
                 {won > 0 && <div className="last win">+{won}</div>}
-                {p.bet > 0 && <div className="bet">{p.bet}</div>}
               </div>
             );
           })}
+        </div>
+        <div className="bets-layer">
+          {(hand?.players ?? []).map((p, i) =>
+            p.bet > 0 ? (
+              <div key={p.id} className="bet-spot" style={{ left: `${betPos(nSeats, i, compact)[0]}%`, top: `${betPos(nSeats, i, compact)[1]}%` }}>
+                <ChipStack amount={p.bet} unit={unit} small label />
+              </div>
+            ) : null,
+          )}
+          {flights.map((f) => <FlyingChips key={f.id} f={f} unit={unit} onDone={landed} />)}
         </div>
         <div className="center">
           <div className="board">
             {[0, 1, 2, 3, 4].map((k) => (hand?.board[k] ? <CardView key={`${handNo}-b${k}`} card={hand.board[k]} size="md" delay={k < 3 ? k * 90 : 0} /> : <div key={k} className="card slot md" />))}
           </div>
-          {hand && !done && <div className="pot">Pot : {potTotal(hand)}</div>}
+          <div className="pot-row">
+            <div className="pot-chips" ref={potRef}>{collected > 0 && <ChipStack amount={collected} unit={unit} small={compact} />}</div>
+            {hand && !done && <div className="pot">Pot : {potTotal(hand)}</div>}
+          </div>
           {hand?.showdown && hero && hand.showdown[HERO_ID] && <div className="pot">Ta main : {describeHand(hand.showdown[HERO_ID])}</div>}
           {!hand?.showdown && heroHand && <div className="pot hint">Ta main : {heroHand}</div>}
         </div>

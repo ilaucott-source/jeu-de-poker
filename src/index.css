@@ -236,7 +236,7 @@ button.sound { font-size: 1rem; padding: 2px 6px; }
 
 /* ===== Bouton du donneur et blinds, bien visibles ===== */
 .plate { overflow: visible; }
-.seat .markers { position: absolute; top: 50%; transform: translateY(-50%); right: -32px; display: flex; flex-direction: column; gap: 3px; z-index: 3; pointer-events: none; }
+.seat .markers { position: absolute; top: -14px; right: -10px; display: flex; flex-direction: row; gap: 3px; z-index: 3; pointer-events: none; }
 .marker {
   width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
   font-weight: 800; font-size: .72rem; letter-spacing: -.02em; font-family: system-ui, sans-serif;
@@ -249,5 +249,52 @@ button.sound { font-size: 1rem; padding: 2px 6px; }
 @media (orientation: landscape) and (max-height: 520px) {
   .marker { width: 22px; height: 22px; font-size: .58rem; border-width: 1.5px; }
   .marker.dealer-btn { font-size: .72rem; }
-  .seat .markers { right: -25px; gap: 2px; }
+  .seat .markers { top: -11px; right: -8px; gap: 2px; }
+}
+
+/* ===== Jetons ===== */
+.plate-row { display: flex; align-items: flex-end; gap: 6px; }
+.seat.left .plate-row { flex-direction: row-reverse; }
+.chipstack { display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; }
+.chipstack .cols { display: flex; align-items: flex-end; gap: 1px; }
+.chipstack .col { position: relative; width: 22px; height: calc(4px * 10 + 12px); }
+.chipstack.small .col { width: 16px; height: calc(3px * 8 + 9px); }
+.chip-disc {
+  position: absolute; left: 0; bottom: calc(var(--k) * 4px); width: 22px; height: 12px; border-radius: 50%;
+  background: var(--chip); box-shadow: 0 1px 0 #0008, inset 0 -2px 0 #0004;
+}
+.chip-disc::after { content: ''; position: absolute; inset: 2px 4px; border-radius: 50%; border: 1.5px dashed #ffffffcc; }
+.chipstack.small .chip-disc { width: 16px; height: 9px; bottom: calc(var(--k) * 3px); }
+.chipstack.small .chip-disc::after { inset: 1.5px 3px; border-width: 1px; }
+.c1 { --chip: radial-gradient(ellipse at 40% 35%, #ffffff, #cfcac0); }
+.c1::after { border-color: #2456b8 !important; }
+.c5 { --chip: radial-gradient(ellipse at 40% 35%, #f0545c, #a81f28); }
+.c25 { --chip: radial-gradient(ellipse at 40% 35%, #3fbf75, #136b3a); }
+.c100 { --chip: radial-gradient(ellipse at 40% 35%, #4a4a4a, #111); }
+.c500 { --chip: radial-gradient(ellipse at 40% 35%, #a776e8, #5b2a9e); }
+.c1000 { --chip: radial-gradient(ellipse at 40% 35%, #ffe08a, #c9962e); }
+.chip-amount { font-size: .72rem; font-weight: 700; color: var(--ink); background: #000a; border-radius: 8px; padding: 0 6px; font-variant-numeric: tabular-nums; }
+
+.bets-layer { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.bet-spot, .flyer { position: absolute; transform: translate(-50%, -50%); }
+.bet-spot { animation: betIn .3s ease-out; }
+@keyframes betIn { from { opacity: 0; transform: translate(-50%, -20%) scale(.8); } }
+.flyer { transition: left .55s cubic-bezier(.4,0,.2,1), top .55s cubic-bezier(.4,0,.2,1), opacity .3s; z-index: 4; }
+.pot-chips { min-height: 0; display: flex; justify-content: center; }
+@media (prefers-reduced-motion: reduce) { .flyer { transition-duration: .01s; } }
+
+@media (orientation: landscape) and (max-height: 520px) {
+  .chipstack .col { width: 16px; height: calc(3px * 10 + 9px); }
+  .chip-disc { width: 16px; height: 9px; bottom: calc(var(--k) * 3px); }
+  .chip-disc::after { inset: 1.5px 3px; border-width: 1px; }
+  .chipstack.small .col { width: 13px; height: calc(2.5px * 8 + 7px); }
+  .chipstack.small .chip-disc { width: 13px; height: 7px; bottom: calc(var(--k) * 2.5px); }
+  .chip-amount { font-size: .6rem; }
+  .plate-row { gap: 3px; }
+}
+.pot-row { display: flex; align-items: center; gap: 8px; min-height: 30px; }
+.pot-chips { min-width: 1px; }
+@media (orientation: landscape) and (max-height: 520px) {
+  .center { padding-top: 8%; padding-bottom: 14%; gap: 2px; }
+  .pot-row { min-height: 22px; gap: 4px; }
 }
