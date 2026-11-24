@@ -188,7 +188,7 @@ export function Table({ options, onQuit, onReplay }: { options: CashGameOptions;
       {showOdds && (hand ? <OddsPanel hand={hand} heroId={HERO_ID} raiseTo={heroTurn ? raiseTo : null} onClose={toggleOdds} /> : <aside className="odds-panel"><p className="muted">Distribue une main pour voir tes statistiques.</p></aside>)}
       <div className="rail">
       <div className="felt" ref={feltRef}>
-        <div className={`seats n${(hand?.players.length ?? options.bots + 1)}`}>
+        <div className={`seats n${nSeats} ${nSeats >= 8 ? 'crowded' : ''}`}>
           {(hand?.players ?? []).map((p, i) => {
             const isHero = p.id === HERO_ID;
             const reveal = isHero || (hand!.showdown && hand!.showdown[p.id]);

@@ -491,3 +491,24 @@ button.act.primary { color: #1b1408; }
   .end-actions button { padding: 8px 12px; font-size: .85rem; }
   .toast { top: 34px; font-size: .7rem; padding: 5px 12px; }
 }
+
+/* ================= Table pleine (8 à 10 joueurs) ================= */
+.crowded .plate { min-width: 104px; padding: 4px 10px 4px 44px; }
+.crowded .plate .avatar { width: 34px; height: 34px; }
+.crowded .plate .name { max-width: 84px; }
+.crowded .seat:not(.hero) .plate-row > .chipstack { display: none; }
+.crowded .seat:not(.hero) .card.sm { --w: calc(var(--card-sm) * .85); }
+@media (orientation: landscape) and (max-height: 520px) {
+  .crowded .plate { min-width: 0; max-width: 84px; padding: 1px 5px 1px 24px; }
+  .crowded .plate .avatar { width: 19px; height: 19px; left: 2px; }
+  .crowded .plate .name { max-width: 52px; font-size: .55rem; }
+  .crowded .plate .stack { font-size: .7rem; }
+  .crowded .seat:not(.hero) .card.sm { --w: 22px; }
+  /* table pleine sur téléphone : on cache les dos de cartes adverses, le cadre doré suffit */
+  .crowded .seat:not(.hero) .hole:not(:has(.face)) { display: none; }
+  .with-stats .crowded .seat.hero .card.lg { --w: 36px; }
+  .crowded .marker { width: 18px; height: 18px; font-size: .5rem; }
+  .crowded .seat .markers { top: -9px; right: -7px; }
+  .crowded .last { font-size: .5rem; padding: 0 5px; }
+  .crowded .chipstack.small .col { width: 11px; }
+}

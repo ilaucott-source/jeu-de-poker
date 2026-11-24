@@ -51,6 +51,9 @@ export const GRID_LABELS = RANKS_DESC.map((r) => (r === 'T' ? '10' : r));
 
 export const POSITION_FR: Record<string, string> = {
   UTG: 'UTG (premier de parole)',
+  'UTG*': 'UTG (premier de parole)',
+  'UTG+1': 'UTG+1',
+  MP: 'Milieu de table',
   HJ: 'Hijack',
   CO: 'Cut-off',
   BTN: 'Bouton',
@@ -59,7 +62,9 @@ export const POSITION_FR: Record<string, string> = {
 };
 
 /** Part des mains à ouvrir (relance d'ouverture) selon la position, table de 6 au plus. */
-const OPEN: Record<string, number> = { UTG: 0.15, HJ: 0.19, CO: 0.27, BTN: 0.45, SB: 0.4, BB: 0.4 };
+const OPEN: Record<string, number> = { UTG: 0.15, 'UTG+1': 0.11, MP: 0.14, HJ: 0.19, CO: 0.27, BTN: 0.45, SB: 0.4, BB: 0.4 };
+/** À table pleine, le premier de parole joue encore plus serré. */
+const OPEN_FULL_UTG = 0.09;
 
 /** Position d'un joueur (par son index) dans la main. */
 export function positionOf(hand: HandState, index: number): string {
@@ -75,10 +80,13 @@ export function positionOf(hand: HandState, index: number): string {
     if (!hand.players[j].out && j !== hand.sbIndex && j !== hand.bbIndex) order.push(j);
   }
   const d = order.indexOf(index);
-  return d === 0 ? 'CO' : d === 1 ? 'HJ' : 'UTG';
+  const m = order.length; // joueurs entre les blinds et le bouton
+  if (d === m - 1 && m >= 3) return m >= 5 ? 'UTG*' : 'UTG';
+  if (d === m - 2 && m >= 5) return 'UTG+1';
+  return d === 0 ? 'CO' : d === 1 ? 'HJ' : d === m - 1 ? 'UTG' : 'MP';
 }
 
-export const openRange = (pos: string, headsUp: boolean) => (headsUp ? 0.8 : OPEN[pos] ?? 0.2);
+export const openRange = (pos: string, headsUp: boolean) => (headsUp ? 0.8 : pos === 'UTG*' ? OPEN_FULL_UTG : OPEN[pos] ?? 0.2);
 
 /* ---------- Ranges estimées des adversaires ---------- */
 

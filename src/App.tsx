@@ -84,8 +84,8 @@ export default function App() {
           />
         </div>
         <div className="field">
-          <span>Adversaires</span>
-          <Segmented<number> label="Adversaires" value={opts.bots} onChange={(v) => setOpts({ ...opts, bots: v })} options={[1, 2, 3, 4, 5].map((n) => ({ v: n, label: String(n) }))} />
+          <span>Adversaires ({opts.bots + 1} joueurs à la table)</span>
+          <Segmented<number> label="Adversaires" value={opts.bots} onChange={(v) => setOpts({ ...opts, bots: v })} options={[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({ v: n, label: String(n) }))} />
         </div>
         <div className="field">
           <span>Niveau des adversaires</span>

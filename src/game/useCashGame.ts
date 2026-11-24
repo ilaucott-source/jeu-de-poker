@@ -96,7 +96,7 @@ export function useCashGame(opts: CashGameOptions) {
     const p = hand.players[hand.toAct];
     if (p.id === HERO_ID) return;
     const style = styleFor(p.name) ?? BOT_STYLES[0];
-    const t = setTimeout(() => setHand((h) => (h && h.toAct !== null && h.players[h.toAct].id === p.id ? applyAction(h, styledBot(h, style)) : h)), 650 + Math.random() * 650);
+    const t = setTimeout(() => setHand((h) => (h && h.toAct !== null && h.players[h.toAct].id === p.id ? applyAction(h, styledBot(h, style)) : h)), (total > 6 ? 450 : 650) + Math.random() * (total > 6 ? 450 : 650));
     return () => clearTimeout(t);
   }, [hand]);
 

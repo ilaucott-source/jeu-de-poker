@@ -40,10 +40,10 @@ export const BOT_STYLES: BotStyle[] = [
 export const LEVEL_FR: Record<BotLevel | 'mix', string> = { facile: 'Facile', moyen: 'Moyen', difficile: 'Difficile', expert: 'Expert', mix: 'Mélangé' };
 
 const POOLS: Record<BotLevel, string[]> = {
-  facile: ['Le Débutant', 'La Prudente', 'Le Fêtard', 'Le Cow-boy', 'La Calculatrice'],
-  moyen: ['Le Fêtard', 'La Calculatrice', 'Le Cow-boy', 'La Prudente', 'Le Requin'],
-  difficile: ['Le Requin', 'La Pro', 'La Calculatrice', 'Le Mystère', 'Le Cow-boy'],
-  expert: ['Le Mystère', 'Le Vétéran', 'Le Requin', 'La Pro', 'La Calculatrice'],
+  facile: ['Le Débutant', 'La Prudente', 'Le Fêtard', 'Le Cow-boy', 'La Calculatrice', 'Le Requin', 'La Pro', 'Le Mystère', 'Le Vétéran'],
+  moyen: ['Le Fêtard', 'La Calculatrice', 'Le Cow-boy', 'La Prudente', 'Le Requin', 'Le Débutant', 'La Pro', 'Le Mystère', 'Le Vétéran'],
+  difficile: ['Le Requin', 'La Pro', 'La Calculatrice', 'Le Mystère', 'Le Cow-boy', 'Le Vétéran', 'Le Fêtard', 'La Prudente', 'Le Débutant'],
+  expert: ['Le Mystère', 'Le Vétéran', 'Le Requin', 'La Pro', 'La Calculatrice', 'Le Cow-boy', 'Le Fêtard', 'La Prudente', 'Le Débutant'],
 };
 
 /** Choisit les adversaires selon le niveau demandé. */
