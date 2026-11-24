@@ -4,6 +4,7 @@ import type { CashGameOptions, GameMode } from './game/useCashGame';
 import { LEVEL_FR, pickBots, type BotLevel } from './engine/bots';
 import { SPEED, type TourneySpeed } from './game/tournament';
 import { Table } from './ui/Table';
+import { Progress } from './ui/Progress';
 import { TIMER_PRESETS, type TimerPreset } from './game/timer';
 
 function Segmented<T extends string | number>({ value, options, onChange, label }: { value: T; options: { v: T; label: string }[]; onChange: (v: T) => void; label: string }) {
@@ -37,6 +38,7 @@ export default function App() {
   };
   const [game, setGame] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(false);
 
   if (playing)
     return (
@@ -47,6 +49,7 @@ export default function App() {
         onReplay={() => setGame((g) => g + 1)}
       />
     );
+  if (progress) return <Progress onClose={() => setProgress(false)} />;
   const tourney = opts.mode === 'tournament';
   const preview = opts.level === 'mix' ? null : pickBots(opts.level, opts.bots);
 
@@ -117,6 +120,7 @@ export default function App() {
         </div>
         <p className="note">{TIMER_PRESETS[opts.timer].hint} Ensuite une banque de temps prend le relais.</p>
         <button className="primary big" onClick={() => setPlaying(true)}>Jouer</button>
+        <button className="progress-link" onClick={() => setProgress(true)}>Ma progression · statistiques et analyse des mains</button>
       </div>
     </div>
   );

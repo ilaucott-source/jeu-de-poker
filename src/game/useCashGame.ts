@@ -3,6 +3,9 @@ import { BOT_STYLES, pickBots, styleFor, type BotLevel } from '../engine/bots';
 import type { TimerPreset } from './timer';
 import { applyAction, startHand, stacksAfter, type BettingStructure, type HandState, type PlayerAction, type SeatInput } from '../engine/holdem';
 import { styledBot } from '../engine/bots';
+import { analyzeHand, type HandScript } from '../engine/analysis';
+import { recordFromHand, saveHand, saveTourney, updateHand } from './history';
+import { LEVEL_FR } from '../engine/bots';
 import { BLIND_LEVELS, levelFor, SPEED, TOURNEY_STACK, type TourneySpeed } from './tournament';
 
 export const HERO_ID = 'hero';
@@ -37,6 +40,9 @@ export function useCashGame(opts: CashGameOptions) {
   const [hand, setHand] = useState<HandState | null>(null);
   const [handNo, setHandNo] = useState(0);
   const handNoRef = useRef(0);
+  const scriptRef = useRef<Omit<HandScript, 'actions'> | null>(null);
+  const savedRef = useRef(0);
+  const [lastRecordId, setLastRecordId] = useState<string | null>(null);
   const [eliminated, setEliminated] = useState<Elimination[]>([]);
   const startStack = tourney ? TOURNEY_STACK : opts.buyInBB * opts.bigBlind;
   const botsRef = useRef(pickBots(opts.level, opts.bots));
@@ -69,16 +75,16 @@ export function useCashGame(opts: CashGameOptions) {
     const no = handNoRef.current + 1;
     handNoRef.current = no;
     const lv = tourney ? BLIND_LEVELS[levelFor(no, opts.speed)] : { sb: opts.bigBlind / 2, bb: opts.bigBlind, ante: 0 };
-    setHand(
-      startHand(seatsRef.current, {
-        structure: opts.structure,
-        smallBlind: lv.sb,
-        bigBlind: lv.bb,
-        ante: lv.ante || undefined,
-        buttonIndex: b,
-        seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0,
-      }),
-    );
+    const config = {
+      structure: opts.structure,
+      smallBlind: lv.sb,
+      bigBlind: lv.bb,
+      ante: lv.ante || undefined,
+      buttonIndex: b,
+      seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0,
+    };
+    scriptRef.current = { seats: seatsRef.current.map((x) => ({ ...x })), config };
+    setHand(startHand(seatsRef.current, config));
     setHandNo(no);
   }, [opts.bigBlind, opts.buyInBB, opts.structure, opts.speed, tourney]);
 
@@ -102,8 +108,24 @@ export function useCashGame(opts: CashGameOptions) {
 
   useEffect(() => {
     if (hand?.street !== 'complete') return;
-    const before = new Map(hand.players.map((p) => [p.id, p.committed + p.stack]));
+    const before = new Map((scriptRef.current?.seats ?? []).map((p) => [p.id, p.stack]));
     seatsRef.current = stacksAfter(hand);
+    // historique et analyse de la main (une seule fois par main)
+    if (scriptRef.current && savedRef.current !== handNoRef.current) {
+      savedRef.current = handNoRef.current;
+      const rec = recordFromHand(hand, scriptRef.current, HERO_ID, opts.mode);
+      if (rec) {
+        saveHand(rec);
+        setLastRecordId(rec.id);
+        setTimeout(() => {
+          try {
+            updateHand(rec.id, { decisions: analyzeHand(rec.script, HERO_ID) });
+          } catch {
+            /* analyse impossible : la main reste dans l'historique */
+          }
+        }, 50);
+      }
+    }
     if (!tourney) return;
     // éliminations : le joueur qui avait le plus de jetons au début de la main finit devant
     const busted = hand.players.filter((p) => !p.out && seatsRef.current.find((s) => s.id === p.id)!.stack <= 0);
@@ -121,6 +143,12 @@ export function useCashGame(opts: CashGameOptions) {
   const heroOut = eliminated.find((e) => e.id === HERO_ID);
   const tourneyOver = tourney && (alive <= 1 || !!heroOut);
   const heroPlace = heroOut ? heroOut.place : alive <= 1 ? 1 : null;
+  const tourneySaved = useRef(false);
+  useEffect(() => {
+    if (!tourneyOver || !heroPlace || tourneySaved.current) return;
+    tourneySaved.current = true;
+    saveTourney({ ts: Date.now(), place: heroPlace, players: total, hands: handNoRef.current, level: LEVEL_FR[opts.level] });
+  }, [tourneyOver, heroPlace, total, opts.level]);
 
   return {
     hand,
@@ -139,5 +167,6 @@ export function useCashGame(opts: CashGameOptions) {
     total,
     tourneyOver,
     heroPlace,
+    lastRecordId,
   };
 }

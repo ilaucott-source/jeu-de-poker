@@ -9,6 +9,8 @@ import { OddsPanel } from './OddsPanel';
 import { ChipStack, FlyingChips, type Flight } from './chips';
 import { ordinalFR } from '../game/tournament';
 import { TourneyEnd } from './TourneyEnd';
+import { HandReview } from './HandReview';
+import { loadHands, type HandRecord } from '../game/history';
 import { betPos, isCompactLandscape, seatPos } from './layout';
 import { isMuted, playBoard, playCheck, playChips, playDeal, playFold, playWin, setMuted, unlockAudio } from '../game/sound';
 
@@ -20,6 +22,7 @@ export function Table({ options, onQuit, onReplay }: { options: CashGameOptions;
   const { hand, handNo, deal, act, rebuy, heroStack } = game;
   const tourney = options.mode === 'tournament';
   const [toast, setToast] = useState<string | null>(null);
+  const [review, setReview] = useState<HandRecord | null>(null);
   const seenElim = useRef(0);
   useEffect(() => {
     const fresh = game.eliminated.slice(seenElim.current).filter((e) => e.id !== HERO_ID);
@@ -258,6 +261,7 @@ export function Table({ options, onQuit, onReplay }: { options: CashGameOptions;
         <TourneyEnd place={game.heroPlace} total={game.total} hands={handNo} level={game.levelIndex + 1} eliminated={game.eliminated} onReplay={onReplay} onQuit={onQuit} />
       )}
 
+      {review && <HandReview record={review} onClose={() => setReview(null)} />}
       <footer className="actions">
         {done ? (
           tourney && game.tourneyOver ? (
@@ -265,7 +269,14 @@ export function Table({ options, onQuit, onReplay }: { options: CashGameOptions;
           ) : heroStack <= 0 && !tourney ? (
             <button className="primary" onClick={() => { rebuy(); deal(); }}>Se recaver et rejouer</button>
           ) : (
-            <button className="primary" onClick={deal}>{hand ? 'Main suivante' : 'Distribuer'}</button>
+            <div className="done-actions">
+              {game.lastRecordId && hand && (
+                <button className="pill review-btn" onClick={() => setReview(loadHands().find((h) => h.id === game.lastRecordId) ?? null)}>
+                  Analyse de la main
+                </button>
+              )}
+              <button className="primary" onClick={deal}>{hand ? 'Main suivante' : 'Distribuer'}</button>
+            </div>
           )
         ) : heroTurn && legal ? (
           <BetPanel hand={hand!} legal={legal} allIn={hero!.stack + hero!.bet} onAct={act} onAmount={setRaiseTo} />
