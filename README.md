@@ -12,3 +12,5 @@ npx vitest run   # tests du moteur
 ```
 
 Chaque envoi sur `main` lance les tests puis met le jeu en ligne sur GitHub Pages.
+
+Sons : pack « Casino Audio » de Kenney (www.kenney.nl), licence CC0 (public/sfx).

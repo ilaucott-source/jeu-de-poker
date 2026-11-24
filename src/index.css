@@ -29,7 +29,8 @@ select { font: inherit; padding: 8px; border-radius: 8px; background: #13211b; c
 
 .seats { position: absolute; inset: 0; }
 .seat { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 2px; transition: opacity .3s; }
-.seat.folded { opacity: .4; }
+.seat.folded .hole, .seat.folded .plate > :not(.markers), .seat.folded .last { opacity: .4; }
+.seat.folded .plate { border-color: #3a4c4366; }
 .seat .hole { display: flex; gap: 3px; }
 .plate { background: #000c; border: 1px solid #3a4c43; border-radius: 10px; padding: 4px 12px; text-align: center; min-width: 96px; }
 .seat.active .plate { border-color: var(--gold); box-shadow: 0 0 16px #d4af6a88; }
@@ -231,4 +232,22 @@ button.sound { font-size: 1rem; padding: 2px 6px; }
   .center { padding-top: 4%; padding-bottom: 10%; }
   .pot.hint { display: none; }
   .n6 .pos3, .n4 .pos2, .n2 .pos1 { top: 10%; }
+}
+
+/* ===== Bouton du donneur et blinds, bien visibles ===== */
+.plate { overflow: visible; }
+.seat .markers { position: absolute; top: 50%; transform: translateY(-50%); right: -32px; display: flex; flex-direction: column; gap: 3px; z-index: 3; pointer-events: none; }
+.marker {
+  width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: .72rem; letter-spacing: -.02em; font-family: system-ui, sans-serif;
+  box-shadow: 0 2px 6px #000c, inset 0 -2px 0 #0003; animation: pop .35s ease-out;
+}
+.marker.dealer-btn { background: radial-gradient(circle at 35% 30%, #ffffff, #e7e2d6); color: #111; border: 2px solid #111; font-size: .9rem; }
+.marker.sb { background: radial-gradient(circle at 35% 30%, #6fa3ff, #2456b8); color: #fff; border: 2px dashed #ffffffaa; }
+.marker.bb { background: radial-gradient(circle at 35% 30%, #ffe08a, #c9962e); color: #1b140a; border: 2px dashed #1b140a88; }
+@keyframes pop { from { transform: scale(.3); opacity: 0; } }
+@media (orientation: landscape) and (max-height: 520px) {
+  .marker { width: 22px; height: 22px; font-size: .58rem; border-width: 1.5px; }
+  .marker.dealer-btn { font-size: .72rem; }
+  .seat .markers { right: -25px; gap: 2px; }
 }

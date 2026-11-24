@@ -5,7 +5,7 @@ import { avatarFor, HERO_ID, useCashGame, type CashGameOptions } from '../game/u
 import { CardView } from './CardView';
 import { useDecisionTimer } from '../game/timer';
 import { BetPanel } from './BetPanel';
-import { isMuted, playCheck, playChips, playDeal, playFold, playWin, setMuted, unlockAudio } from '../game/sound';
+import { isMuted, playBoard, playChips, playDeal, playFold, playWin, setMuted, unlockAudio } from '../game/sound';
 
 const STRUCTURE_FR = { NL: 'No Limit', PL: 'Pot Limit', FL: 'Limit' };
 const ACTION_FR: Record<string, string> = { fold: 'Couché', check: 'Parole', call: 'Suit', bet: 'Mise', raise: 'Relance', post: 'Blind' };
@@ -20,7 +20,11 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
   const lastAction = useMemo(() => {
     const m: Record<string, string> = {};
     if (!hand) return m;
-    for (const a of hand.log) if (a.street === hand.street || hand.street === 'complete') m[a.playerId] = ACTION_FR[a.type] + (a.amount && a.type !== 'post' ? ` ${a.amount}` : '');
+    for (const a of hand.log) {
+      if (a.street !== hand.street && hand.street !== 'complete') continue;
+      if (a.type === 'post') m[a.playerId] = a.label === 'petite blind' ? `SB ${a.amount}` : a.label === 'grosse blind' ? `BB ${a.amount}` : `Ante ${a.amount}`;
+      else m[a.playerId] = ACTION_FR[a.type] + (a.amount ? ` ${a.amount}` : '');
+    }
     return m;
   }, [hand]);
 
@@ -34,23 +38,26 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
   });
 
   // Sons : on joue chaque nouvelle action du journal
-  const heard = useRef({ hand: -1, count: 0, won: false });
+  const heard = useRef({ hand: -1, count: 0, won: false, board: 0 });
   useEffect(() => {
     if (!hand) return;
     const h = heard.current;
     if (h.hand !== handNo) {
-      heard.current = { hand: handNo, count: 0, won: false };
+      heard.current = { hand: handNo, count: 0, won: false, board: 0 };
       playDeal();
     }
     const fresh = hand.log.slice(heard.current.count);
     heard.current.count = hand.log.length;
     const last = fresh.filter((a) => a.type !== 'post').pop();
-    if (fresh.some((a) => a.type === 'post') && !last) playChips(2);
+    if (fresh.some((a) => a.type === 'post') && !last) playChips(1);
     if (last) {
       if (last.type === 'fold') playFold();
-      else if (last.type === 'check') playCheck();
-      else playChips(2 + Math.round(Math.log2(1 + last.amount / bb)));
+      else if (last.type !== 'check') playChips(last.amount / bb);
     }
+    if (hand.board.length > heard.current.board && hand.street !== 'complete') {
+      playBoard(hand.board.length - heard.current.board);
+    }
+    heard.current.board = hand.board.length;
     if (hand.street === 'complete' && !heard.current.won) {
       heard.current.won = true;
       setTimeout(playWin, 450);
@@ -94,8 +101,13 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
                 )}
                 <div className="plate">
                   {avatarFor(p.name) ? <img className="avatar" src={avatarFor(p.name)!} alt="" /> : <div className="avatar me">♠</div>}
-                  <div className="name">{p.name}{hand!.config.buttonIndex === i && <span className="dealer">D</span>}</div>
+                  <div className="name">{p.name}</div>
                   <div className="stack">{p.stack}</div>
+                  <div className="markers">
+                  {hand!.config.buttonIndex === i && <span className="marker dealer-btn" title="Bouton du donneur">D</span>}
+                  {hand!.sbIndex === i && <span className="marker sb" title="Petite blind">SB</span>}
+                  {hand!.bbIndex === i && <span className="marker bb" title="Grosse blind">BB</span>}
+                </div>
                 </div>
                 {lastAction[p.id] && !won && <div className="last">{lastAction[p.id]}</div>}
                 {won > 0 && <div className="last win">+{won}</div>}
