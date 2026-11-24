@@ -36,7 +36,7 @@ export default function App() {
       </label>
       <p className="note">{TIMER_PRESETS[opts.timer].hint} Si le temps est écoulé, une banque de temps prend le relais, puis tu passes parole ou tu te couches automatiquement.</p>
       <button className="primary big" onClick={() => setPlaying(true)}>Jouer</button>
-      <p className="note">Version de travail : moteur de règles complet, bots simples. Le style définitif arrive à l'étape 4.</p>
+      <p className="note dev">Version de travail : moteur de règles complet, bots simples. Le style définitif arrive à l'étape 4.</p>
     </div></div>
   );
 }

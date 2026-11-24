@@ -101,3 +101,75 @@ select { font: inherit; padding: 8px; border-radius: 8px; background: #13211b; c
   .n3 .pos1 { left: 22%; } .n3 .pos2 { left: 78%; }
   .topbar { font-size: .75rem; gap: 8px; }
 }
+
+/* ===== Téléphone en paysage : tout l'écran visible, sans défilement ===== */
+html, body, #root { height: 100%; }
+.rotate-hint { display: none; }
+.table-screen { overflow: hidden; padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+
+@media (orientation: landscape) and (max-height: 520px) {
+  body { min-height: 0; }
+  .table-screen {
+    display: grid; height: 100%;
+    grid-template-columns: 1fr 156px; grid-template-rows: auto 1fr;
+    grid-template-areas: "top top" "felt actions";
+  }
+  .topbar { grid-area: top; padding: 2px 12px; font-size: .7rem; }
+  .topbar button.ghost { padding: 2px 4px; font-size: .75rem; }
+  .felt { grid-area: felt; min-height: 0; margin: 2px 4px 6px 8px; border-width: 5px; border-radius: 999px; }
+  .actions {
+    grid-area: actions; flex-direction: column; flex-wrap: nowrap; justify-content: center; align-items: stretch;
+    gap: 6px; padding: 4px 8px calc(6px + env(safe-area-inset-bottom)) 4px; min-height: 0;
+  }
+  .actions button { padding: 8px 6px; font-size: .85rem; }
+  .actions .raise { flex-direction: column-reverse; align-items: stretch; gap: 6px; }
+  .actions .raise input { width: 100%; }
+  .waiting { font-size: .8rem; text-align: center; }
+
+  .card { width: 30px; height: 42px; border-radius: 5px; }
+  .card .rank, .card .suit { font-size: .8rem; }
+  .card.small { width: 22px; height: 31px; }
+  .card.small .rank, .card.small .suit { font-size: .6rem; }
+  .seat .hole { height: 31px; } .seat.hero .hole { height: 42px; }
+  .board { gap: 4px; }
+  .center { gap: 4px; }
+  .pot { font-size: .75rem; padding: 2px 10px; }
+  .plate { padding: 1px 6px 1px 28px; min-width: 0; max-width: 104px; border-radius: 8px; }
+  .plate .name { font-size: .62rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .plate .stack { font-size: .78rem; }
+  .plate .avatar { width: 22px; height: 22px; left: 3px; border-width: 1.5px; }
+  .last, .bet { font-size: .6rem; }
+  .timer { width: 80px; height: 13px; font-size: .58rem; }
+  .dealer { width: 13px; height: 13px; line-height: 13px; font-size: .55rem; }
+
+  /* positions autour d'une table large et basse */
+  .pos0 { top: 86%; }
+  .n6 .pos1 { left: 9%; top: 72%; } .n6 .pos2 { left: 9%; top: 24%; } .n6 .pos3 { top: 12%; } .n6 .pos4 { left: 91%; top: 24%; } .n6 .pos5 { left: 91%; top: 72%; }
+  .n5 .pos1 { left: 9%; top: 60%; } .n5 .pos2 { left: 30%; top: 13%; } .n5 .pos3 { left: 70%; top: 13%; } .n5 .pos4 { left: 91%; top: 60%; }
+  .n4 .pos1 { left: 9%; top: 45%; } .n4 .pos2 { top: 12%; } .n4 .pos3 { left: 91%; top: 45%; }
+  .n3 .pos1 { left: 15%; top: 20%; } .n3 .pos2 { left: 85%; top: 20%; }
+  .n2 .pos1 { top: 12%; }
+
+  /* menu compact */
+  .menu-screen { height: 100%; min-height: 0; overflow-y: auto; }
+  .menu { max-width: 560px; padding: 14px 20px; gap: 8px; margin-block: 8px; }
+  .menu h1 { font-size: 1.5rem; }
+  .menu .sub { margin: 0 0 4px; font-size: .85rem; }
+  .menu .note { font-size: .72rem; margin: 0; }
+  .menu .note.dev { display: none; }
+  .menu select { padding: 5px 8px; }
+  button.big { padding: 10px 30px; font-size: 1rem; margin-top: 4px; }
+}
+
+/* ===== Téléphone en portrait : on invite à tourner l'écran ===== */
+@media (orientation: portrait) and (max-width: 600px) {
+  .table-screen .rotate-hint {
+    display: flex; position: fixed; inset: 0; z-index: 50; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+    background: radial-gradient(ellipse at center, #0d3a2a, var(--bg)); text-align: center; padding: 24px;
+  }
+  .rotate-hint .phone { width: 46px; height: 80px; border: 3px solid var(--gold); border-radius: 10px; animation: turn 2.2s ease-in-out infinite; }
+  .rotate-hint p { margin: 0; font-size: 1.1rem; color: var(--ink); }
+  .rotate-hint small { color: var(--muted); }
+}
+@keyframes turn { 0%, 25% { transform: rotate(0); } 55%, 100% { transform: rotate(-90deg); } }
+@media (prefers-reduced-motion: reduce) { .rotate-hint .phone { animation: none; transform: rotate(-90deg); } }

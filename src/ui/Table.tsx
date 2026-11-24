@@ -35,6 +35,11 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
 
   return (
     <div className="table-screen">
+      <div className="rotate-hint" role="alert">
+        <div className="phone" aria-hidden="true" />
+        <p>Tourne ton téléphone pour jouer</p>
+        <small>La table s'affiche en paysage.</small>
+      </div>
       <header className="topbar">
         <button className="ghost" onClick={onQuit}>← Menu</button>
         <span>Cash game · {STRUCTURE_FR[options.structure]} · {bb / 2}/{bb}</span>
