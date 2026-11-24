@@ -298,3 +298,54 @@ button.sound { font-size: 1rem; padding: 2px 6px; }
   .center { padding-top: 8%; padding-bottom: 14%; gap: 2px; }
   .pot-row { min-height: 22px; gap: 4px; }
 }
+
+/* ---- Qui est en jeu / à qui le tour ---- */
+.seat.in-hand .plate { border-color: #d4af6a99; box-shadow: 0 0 0 1px #d4af6a44, 0 4px 14px #000a; }
+.seat.active .plate { border-color: #ffd97a; animation: turn-glow 1.1s ease-in-out infinite; }
+.seat.active .plate::after { content: ''; position: absolute; inset: -5px; border-radius: 13px; border: 2px solid #ffd97a; pointer-events: none; animation: turn-ring 1.1s ease-out infinite; }
+@keyframes turn-glow { 0%, 100% { box-shadow: 0 0 10px #ffd97a88, 0 0 0 1px #ffd97a; } 50% { box-shadow: 0 0 26px #ffd97acc, 0 0 0 2px #ffd97a; } }
+@keyframes turn-ring { from { opacity: .9; transform: scale(1); } to { opacity: 0; transform: scale(1.12); } }
+.seat.folded:not(.hero) .hole { visibility: hidden; }
+.seat.folded .plate .avatar { filter: grayscale(1) brightness(.6); border-color: #555; }
+.seat.folded .plate { background: #000a; }
+.thinking { position: absolute; right: 6px; bottom: -9px; display: flex; gap: 3px; background: #ffd97a; padding: 3px 5px; border-radius: 8px; }
+.thinking i { width: 4px; height: 4px; border-radius: 50%; background: #1a1410; animation: think 1s infinite; }
+.thinking i:nth-child(2) { animation-delay: .15s; }
+.thinking i:nth-child(3) { animation-delay: .3s; }
+@keyframes think { 0%, 60%, 100% { opacity: .3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-2px); } }
+.last.allin-tag { background: linear-gradient(180deg, #e2473f, #9c1f1a); color: #fff; font-weight: 800; letter-spacing: .08em; border: 1px solid #ffd97a; }
+.inplay { font-size: .72rem; color: var(--muted); text-align: center; margin-top: 2px; }
+.stats-btn.on { color: #1a1410; background: var(--gold); border-color: var(--gold); }
+@media (prefers-reduced-motion: reduce) { .seat.active .plate, .seat.active .plate::after, .thinking i { animation: none; } }
+
+/* ---- Panneau des statistiques ---- */
+.odds-panel { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 250px; max-height: calc(100% - 20px); overflow-y: auto; z-index: 30;
+  background: #070d0bee; border: 1px solid var(--gold); border-radius: 12px; padding: 10px 12px; font-size: .8rem; color: var(--ink); box-shadow: 0 10px 30px #000c; }
+.odds-panel header { display: flex; justify-content: space-between; align-items: center; color: var(--gold); margin-bottom: 6px; }
+.odds-panel header button { padding: 0 6px; }
+.odds-panel .row { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; padding: 2px 0; }
+.odds-panel .row span { color: var(--muted); }
+.odds-panel .row b { white-space: nowrap; }
+.odds-panel small { display: block; color: var(--muted); font-size: .7rem; line-height: 1.3; margin-top: 2px; }
+.odds-panel .eq, .odds-panel .outs, .odds-panel .potodds { border-top: 1px solid #d4af6a33; margin-top: 6px; padding-top: 6px; }
+.odds-panel .bar { position: relative; height: 8px; background: #ffffff1a; border-radius: 4px; margin: 4px 0; }
+.odds-panel .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: linear-gradient(90deg, #b8913f, #ffd97a); transition: width .4s; }
+.odds-panel .bar em { position: absolute; top: -3px; bottom: -3px; width: 2px; background: #fff; transform: translateX(-1px); }
+.odds-panel .good { color: #6fdc8c; }
+.odds-panel .bad { color: #ff7b6e; }
+.odds-panel .muted { color: var(--muted); margin: 4px 0; }
+.odds-panel .out-line { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 2px 0; }
+.odds-panel .out-line > span:first-child { white-space: nowrap; }
+.odds-panel .mini-cards { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 2px; --card-sm: 22px; }
+.odds-panel .mini-cards .card { animation: none; }
+@media (orientation: landscape) and (max-height: 520px) {
+  .odds-panel { left: 4px; width: 172px; padding: 5px 7px; font-size: .66rem; max-height: calc(100% - 8px); background: #070d0bf2; }
+  .odds-panel header { margin-bottom: 2px; }
+  .odds-panel .row { padding: 1px 0; }
+  .odds-panel .eq small { display: none; }
+  .odds-panel small { font-size: .6rem; }
+  .odds-panel .eq, .odds-panel .outs, .odds-panel .potodds { margin-top: 3px; padding-top: 3px; }
+  .odds-panel .mini-cards { --card-sm: 17px; }
+  .inplay { font-size: .6rem; }
+}
+@media (orientation: portrait) and (max-width: 600px) { .odds-panel { width: 200px; left: 6px; } }

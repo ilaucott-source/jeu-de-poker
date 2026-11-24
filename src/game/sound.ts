@@ -1,6 +1,6 @@
 /**
  * Sons de table : vrais enregistrements de jetons et de cartes
- * (pack « Casino Audio » de Kenney, licence CC0, dans public/sfx).
+ * (packs « Casino Audio » et « Impact Sounds » de Kenney, licence CC0, dans public/sfx).
  */
 const FILES = {
   lay: ['chip-lay-1', 'chip-lay-2', 'chip-lay-3'],
@@ -10,6 +10,7 @@ const FILES = {
   slide: ['card-slide-1', 'card-slide-2', 'card-slide-3', 'card-slide-4'],
   place: ['card-place-1', 'card-place-2', 'card-place-3', 'card-place-4'],
   shove: ['card-shove-1', 'card-shove-2', 'card-shove-3'],
+  knock: ['knock-1', 'knock-2', 'knock-3'],
 } as const;
 type Kind = keyof typeof FILES;
 
@@ -114,3 +115,6 @@ export function playBoard(cards: number) {
 }
 
 export const playFold = () => play('shove', { gain: 0.5 });
+
+/** Parole : deux petits coups sur la table. */
+export const playCheck = () => play('knock', { gain: 0.9 });

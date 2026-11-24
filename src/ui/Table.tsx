@@ -5,9 +5,10 @@ import { avatarFor, HERO_ID, useCashGame, type CashGameOptions } from '../game/u
 import { CardView } from './CardView';
 import { useDecisionTimer } from '../game/timer';
 import { BetPanel } from './BetPanel';
+import { OddsPanel } from './OddsPanel';
 import { ChipStack, FlyingChips, type Flight } from './chips';
 import { betPos, isCompactLandscape, seatPos } from './layout';
-import { isMuted, playBoard, playChips, playDeal, playFold, playWin, setMuted, unlockAudio } from '../game/sound';
+import { isMuted, playBoard, playCheck, playChips, playDeal, playFold, playWin, setMuted, unlockAudio } from '../game/sound';
 
 const STRUCTURE_FR = { NL: 'No Limit', PL: 'Pot Limit', FL: 'Limit' };
 const ACTION_FR: Record<string, string> = { fold: 'Couché', check: 'Parole', call: 'Suit', bet: 'Mise', raise: 'Relance', post: 'Blind' };
@@ -17,6 +18,23 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
   const legal = hand ? legalActions(hand) : null;
   const heroTurn = hand?.toAct !== null && hand?.players[hand.toAct!]?.id === HERO_ID;
   const [muted, setMutedState] = useState(isMuted());
+  const [showOdds, setShowOdds] = useState(() => {
+    try {
+      return localStorage.getItem('poker-odds') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleOdds = () => {
+    setShowOdds((v) => {
+      try {
+        localStorage.setItem('poker-odds', v ? '0' : '1');
+      } catch {
+        /* réglage gardé en mémoire */
+      }
+      return !v;
+    });
+  };
   const bb = options.bigBlind;
 
   const lastAction = useMemo(() => {
@@ -54,7 +72,8 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
     if (fresh.some((a) => a.type === 'post') && !last) playChips(1);
     if (last) {
       if (last.type === 'fold') playFold();
-      else if (last.type !== 'check') playChips(last.amount / bb);
+      else if (last.type === 'check') playCheck();
+      else playChips(last.amount / bb);
     }
     if (hand.board.length > heard.current.board && hand.street !== 'complete') {
       playBoard(hand.board.length - heard.current.board);
@@ -125,6 +144,9 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
         <button className="ghost" onClick={onQuit}>← Menu</button>
         <span>Cash game · {STRUCTURE_FR[options.structure]} · {bb / 2}/{bb}</span>
         <span className="top-right">
+          <button className={`ghost stats-btn ${showOdds ? 'on' : ''}`} onClick={toggleOdds} aria-pressed={showOdds}>
+            📊 Stats
+          </button>
           Main n°{handNo}{timer.enabled && <> · Banque {Math.ceil(timer.bank)} s</>}
           <button className="ghost sound" aria-label={muted ? 'Activer le son' : 'Couper le son'} onClick={() => { setMuted(!muted); setMutedState(!muted); }}>
             {muted ? '🔇' : '🔊'}
@@ -139,7 +161,7 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
             const reveal = isHero || (hand!.showdown && hand!.showdown[p.id]);
             const won = hand!.results?.reduce((s, r) => s + (r.shares[p.id] ?? 0), 0) ?? 0;
             return (
-              <div key={p.id} style={{ left: `${seatPos(nSeats, i, compact)[0]}%`, top: `${seatPos(nSeats, i, compact)[1]}%` }} className={`seat pos${i} ${seatPos(nSeats, i, compact)[0] > 50 ? 'right' : seatPos(nSeats, i, compact)[0] < 50 ? 'left' : 'mid'} ${p.folded ? 'folded' : ''} ${hand!.toAct === i ? 'active' : ''} ${isHero ? 'hero' : ''}`}>
+              <div key={p.id} style={{ left: `${seatPos(nSeats, i, compact)[0]}%`, top: `${seatPos(nSeats, i, compact)[1]}%` }} className={`seat pos${i} ${!p.folded && !p.out && hand!.street !== 'complete' ? 'in-hand' : ''} ${p.allIn && !p.folded ? 'allin' : ''} ${seatPos(nSeats, i, compact)[0] > 50 ? 'right' : seatPos(nSeats, i, compact)[0] < 50 ? 'left' : 'mid'} ${p.folded ? 'folded' : ''} ${hand!.toAct === i ? 'active' : ''} ${isHero ? 'hero' : ''}`}>
                 <div className="hole">
                   {p.holeCards.map((c, k) => <CardView key={`${handNo}-${k}`} card={c} hidden={!reveal} size={isHero ? 'lg' : 'sm'} delay={k * 120} />)}
                 </div>
@@ -154,6 +176,7 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
                 <div className="plate">
                   {avatarFor(p.name) ? <img className="avatar" src={avatarFor(p.name)!} alt="" /> : <div className="avatar me">♠</div>}
                   <div className="name">{p.name}</div>
+                  {hand!.toAct === i && !isHero && <span className="thinking" aria-label="réfléchit"><i /><i /><i /></span>}
                   <div className="stack">{p.stack}</div>
                   <div className="markers">
                   {hand!.config.buttonIndex === i && <span className="marker dealer-btn" title="Bouton du donneur">D</span>}
@@ -162,12 +185,14 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
                 </div>
                 </div>
                 </div>
+                {p.allIn && !p.folded && <div className="last allin-tag">TAPIS</div>}
                 {lastAction[p.id] && !won && <div className="last">{lastAction[p.id]}</div>}
                 {won > 0 && <div className="last win">+{won}</div>}
               </div>
             );
           })}
         </div>
+        {showOdds && hand && hand.street !== 'complete' && <OddsPanel hand={hand} heroId={HERO_ID} onClose={toggleOdds} />}
         <div className="bets-layer">
           {(hand?.players ?? []).map((p, i) =>
             p.bet > 0 ? (
@@ -185,6 +210,7 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
           <div className="pot-row">
             <div className="pot-chips" ref={potRef}>{collected > 0 && <ChipStack amount={collected} unit={unit} small={compact} />}</div>
             {hand && !done && <div className="pot">Pot : {potTotal(hand)}</div>}
+            {hand && !done && <div className="inplay">{hand.players.filter((p) => !p.folded && !p.out).length} en jeu</div>}
           </div>
           {hand?.showdown && hero && hand.showdown[HERO_ID] && <div className="pot">Ta main : {describeHand(hand.showdown[HERO_ID])}</div>}
           {!hand?.showdown && heroHand && <div className="pot hint">Ta main : {heroHand}</div>}
