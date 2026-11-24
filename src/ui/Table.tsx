@@ -7,14 +7,28 @@ import { useDecisionTimer } from '../game/timer';
 import { BetPanel } from './BetPanel';
 import { OddsPanel } from './OddsPanel';
 import { ChipStack, FlyingChips, type Flight } from './chips';
+import { ordinalFR } from '../game/tournament';
+import { TourneyEnd } from './TourneyEnd';
 import { betPos, isCompactLandscape, seatPos } from './layout';
 import { isMuted, playBoard, playCheck, playChips, playDeal, playFold, playWin, setMuted, unlockAudio } from '../game/sound';
 
 const STRUCTURE_FR = { NL: 'No Limit', PL: 'Pot Limit', FL: 'Limit' };
 const ACTION_FR: Record<string, string> = { fold: 'Couché', check: 'Parole', call: 'Suit', bet: 'Mise', raise: 'Relance', post: 'Blind' };
 
-export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: () => void }) {
-  const { hand, handNo, deal, act, rebuy, heroStack } = useCashGame(options);
+export function Table({ options, onQuit, onReplay }: { options: CashGameOptions; onQuit: () => void; onReplay: () => void }) {
+  const game = useCashGame(options);
+  const { hand, handNo, deal, act, rebuy, heroStack } = game;
+  const tourney = options.mode === 'tournament';
+  const [toast, setToast] = useState<string | null>(null);
+  const seenElim = useRef(0);
+  useEffect(() => {
+    const fresh = game.eliminated.slice(seenElim.current).filter((e) => e.id !== HERO_ID);
+    seenElim.current = game.eliminated.length;
+    if (!fresh.length) return;
+    setToast(fresh.map((e) => `${e.name} est éliminé · ${ordinalFR(e.place)}`).join(' — '));
+    const t = setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(t);
+  }, [game.eliminated]);
   const legal = hand ? legalActions(hand) : null;
   const heroTurn = hand?.toAct !== null && hand?.players[hand.toAct!]?.id === HERO_ID;
   const [muted, setMutedState] = useState(isMuted());
@@ -35,7 +49,7 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
       return !v;
     });
   };
-  const bb = options.bigBlind;
+  const bb = hand?.config.bigBlind ?? game.level.bb;
 
   const [raiseTo, setRaiseTo] = useState<number | null>(null);
   const lastAction = useMemo(() => {
@@ -132,12 +146,12 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
     if (add.length) setFlights((f) => [...f, ...add]);
   }, [hand, handNo, compact]);
   const landed = useCallback((id: number) => setFlights((f) => f.filter((x) => x.id !== id)), []);
-  const unit = options.bigBlind / 2;
+  const unit = bb / 2;
   const collected = hand && !done ? hand.players.reduce((s, p) => s + p.committed - p.bet, 0) : 0;
   const nSeats = hand?.players.length ?? options.bots + 1;
 
   return (
-    <div className={`table-screen ${showOdds ? 'with-stats' : ''}`} onPointerDown={unlockAudio}>
+    <div className={`table-screen ${showOdds ? 'with-stats' : ''} ${tourney ? 'tourney' : ''}`} onPointerDown={unlockAudio}>
       <div className="rotate-hint" role="alert">
         <div className="phone" aria-hidden="true" />
         <p>Tourne ton téléphone pour jouer</p>
@@ -146,7 +160,17 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
       <header className="topbar">
         <button className="pill" onClick={onQuit}>‹ Menu</button>
         <span className="title">
-          <b>{STRUCTURE_FR[options.structure]}</b> · Blinds {bb / 2}/{bb} · Main n°{handNo}
+          {tourney ? (
+            <>
+              <b>Tournoi</b> · Niveau {game.levelIndex + 1} · {game.level.sb}/{game.level.bb}
+              {game.level.ante > 0 && <> · ante {game.level.ante}</>}
+              <span className="bank"> · hausse dans {game.handsLeftInLevel + 1} main{game.handsLeftInLevel ? 's' : ''}</span> · {game.alive}/{game.total} joueurs
+            </>
+          ) : (
+            <>
+              <b>{STRUCTURE_FR[options.structure]}</b> · Blinds {bb / 2}/{bb} · Main n°{handNo}
+            </>
+          )}
           {timer.enabled && <span className="bank"> · Banque {Math.ceil(timer.bank)} s</span>}
         </span>
         <span className="top-right">
@@ -170,7 +194,7 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
             const reveal = isHero || (hand!.showdown && hand!.showdown[p.id]);
             const won = hand!.results?.reduce((s, r) => s + (r.shares[p.id] ?? 0), 0) ?? 0;
             return (
-              <div key={p.id} style={{ left: `${seatPos(nSeats, i, compact)[0]}%`, top: `${seatPos(nSeats, i, compact)[1]}%` }} className={`seat pos${i} ${!p.folded && !p.out && hand!.street !== 'complete' ? 'in-hand' : ''} ${p.allIn && !p.folded ? 'allin' : ''} ${seatPos(nSeats, i, compact)[0] > 50 ? 'right' : seatPos(nSeats, i, compact)[0] < 50 ? 'left' : 'mid'} ${p.folded ? 'folded' : ''} ${hand!.toAct === i ? 'active' : ''} ${isHero ? 'hero' : ''}`}>
+              <div key={p.id} style={{ left: `${seatPos(nSeats, i, compact)[0]}%`, top: `${seatPos(nSeats, i, compact)[1]}%` }} className={`seat pos${i} ${!p.folded && !p.out && hand!.street !== 'complete' ? 'in-hand' : ''} ${p.allIn && !p.folded ? 'allin' : ''} ${seatPos(nSeats, i, compact)[0] > 50 ? 'right' : seatPos(nSeats, i, compact)[0] < 50 ? 'left' : 'mid'} ${p.folded ? 'folded' : ''} ${hand!.toAct === i ? 'active' : ''} ${isHero ? 'hero' : ''} ${p.out ? 'out' : ''}`}>
                 <div className="hole">
                   {p.holeCards.map((c, k) => <CardView key={`${handNo}-${k}`} card={c} hidden={!reveal} size={isHero ? 'lg' : 'sm'} delay={k * 120} />)}
                 </div>
@@ -194,6 +218,7 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
                 </div>
                 </div>
                 </div>
+                {p.out && <div className="last k-out">Éliminé</div>}
                 {p.allIn && !p.folded && <div className="last allin-tag">TAPIS</div>}
                 {lastAction.text[p.id] && !won && !(p.allIn && !p.folded) && <div className={`last k-${lastAction.kind[p.id]}`}>{lastAction.text[p.id]}</div>}
                 {won > 0 && <div className="last win">+{won}</div>}
@@ -228,9 +253,16 @@ export function Table({ options, onQuit }: { options: CashGameOptions; onQuit: (
       </div>
       </main>
 
+      {toast && <div className="toast" role="status">{toast}</div>}
+      {tourney && game.tourneyOver && game.heroPlace && (!hand || hand.street === 'complete') && (
+        <TourneyEnd place={game.heroPlace} total={game.total} hands={handNo} level={game.levelIndex + 1} eliminated={game.eliminated} onReplay={onReplay} onQuit={onQuit} />
+      )}
+
       <footer className="actions">
         {done ? (
-          heroStack <= 0 ? (
+          tourney && game.tourneyOver ? (
+            <button className="primary" onClick={onReplay}>Rejouer un tournoi</button>
+          ) : heroStack <= 0 && !tourney ? (
             <button className="primary" onClick={() => { rebuy(); deal(); }}>Se recaver et rejouer</button>
           ) : (
             <button className="primary" onClick={deal}>{hand ? 'Main suivante' : 'Distribuer'}</button>

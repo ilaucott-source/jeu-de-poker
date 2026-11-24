@@ -421,7 +421,10 @@ button.act.primary { color: #1b1408; }
 
   /* menu compact */
   .menu-screen { padding: 8px 16px; align-items: center; overflow-y: auto; }
-  .menu { max-width: 600px; padding: 14px 22px; gap: 9px; display: grid; grid-template-columns: 1fr 1fr; align-items: end; }
+  .menu { max-width: 640px; padding: 12px 20px; gap: 8px 14px; display: grid; grid-template-columns: 1fr 1fr; align-items: start; }
+  .field .note, .menu > .note { display: none; }
+  .field { gap: 4px; }
+  .field > span, .field > label { font-size: .62rem; }
   .brand { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; gap: 14px; text-align: left; }
   .brand .emblem { width: 34px; height: 34px; font-size: 1.1rem; margin: 0 6px 0 0; }
   .brand h1 { font-size: 1.45rem; }
@@ -448,4 +451,43 @@ button.act.primary { color: #1b1408; }
 @media (prefers-reduced-motion: reduce) {
   .card, .timer.urgent, .seat.active .plate, .seat.active .plate::after, .thinking i, .rotate-hint .phone { animation: none; }
   .flyer { transition-duration: .01s; }
+}
+
+/* ================= Tournoi ================= */
+.menu-screen.tourney { background-image: radial-gradient(ellipse at 50% 40%, #0000 0%, #04080799 75%), linear-gradient(180deg, #04080744, #040807bb), url('/img/tournament-hall.webp'); }
+.table-screen.tourney { background: radial-gradient(ellipse 70% 60% at 50% 45%, #1a5a4226, #0000 70%), linear-gradient(#040807d9, #040807ee), url('/img/tournament-hall.webp') center / cover no-repeat; }
+.seat.out { opacity: .35; }
+.seat.out .hole, .seat.out .plate-row > .chipstack, .seat.out .markers { display: none; }
+.last.k-out { color: #ff9a8f; border-color: #ff9a8f55; }
+.toast {
+  position: fixed; left: 50%; top: 58px; transform: translateX(-50%); z-index: 40; padding: 8px 18px; border-radius: 999px; font-weight: 700; font-size: .85rem;
+  background: linear-gradient(180deg, #2a1416f2, #160a0bf2); border: 1px solid #ff9a8f66; color: #ffd9d6; box-shadow: 0 10px 30px #000c; animation: toastIn .35s ease-out; white-space: nowrap;
+}
+@keyframes toastIn { from { opacity: 0; transform: translate(-50%, -10px); } }
+.end-overlay { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 16px; background: radial-gradient(ellipse at center, #0b1f17cc, #020403f2); animation: fadeIn .5s ease-out; overflow-y: auto; }
+@keyframes fadeIn { from { opacity: 0; } }
+.end-card {
+  width: 100%; max-width: 420px; text-align: center; padding: 24px 26px; border-radius: 22px; position: relative;
+  background: linear-gradient(180deg, #0f1a16f2, #060b09f5); border: 1px solid var(--line); box-shadow: 0 30px 90px #000, inset 0 1px 0 #ffffff12;
+}
+.end-card.win { border-color: var(--gold); box-shadow: 0 0 60px #d8b46a44, 0 30px 90px #000; }
+.end-img { width: 150px; height: 150px; object-fit: cover; border-radius: 50%; border: 2px solid var(--gold); box-shadow: 0 0 40px #d8b46a55; animation: pop .6s ease-out; }
+.end-rank { font-family: var(--display); font-size: 3rem; color: var(--gold); }
+.end-card h2 { font-family: var(--display); font-weight: 400; font-size: 2rem; margin: 12px 0 4px; letter-spacing: .06em; background: linear-gradient(180deg, var(--gold-hi), var(--gold-lo)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.end-sub { color: var(--muted); margin: 0 0 12px; font-size: .9rem; line-height: 1.5; }
+.end-sub b { color: var(--gold-hi); }
+.end-ranking { list-style: none; padding: 0; margin: 0 auto 16px; max-width: 260px; text-align: left; font-size: .85rem; }
+.end-ranking li { display: flex; gap: 10px; padding: 3px 8px; border-radius: 8px; }
+.end-ranking li span { color: var(--gold); width: 30px; }
+.end-ranking li.me { background: #d8b46a22; }
+.end-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.end-reopen { position: fixed; top: 58px; left: 50%; transform: translateX(-50%); z-index: 41; }
+@media (orientation: landscape) and (max-height: 520px) {
+  .end-card { max-width: 560px; padding: 14px 18px; display: grid; grid-template-columns: auto 1fr; gap: 0 16px; text-align: left; align-items: center; }
+  .end-img, .end-rank { grid-row: span 3; width: 100px; height: 100px; }
+  .end-card h2 { font-size: 1.4rem; margin: 0; }
+  .end-ranking { display: none; }
+  .end-actions { justify-content: flex-start; }
+  .end-actions button { padding: 8px 12px; font-size: .85rem; }
+  .toast { top: 34px; font-size: .7rem; padding: 5px 12px; }
 }
