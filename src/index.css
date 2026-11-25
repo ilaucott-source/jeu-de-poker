@@ -83,8 +83,8 @@ select {
   display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; overflow: hidden;
   padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right);
   background:
-    radial-gradient(ellipse 70% 60% at 50% 45%, #1a5a4226, #0000 70%),
-    linear-gradient(#040807e0, #040807f0),
+    radial-gradient(ellipse 80% 75% at 50% 48%, #0000 45%, #040807b0 100%),
+    linear-gradient(#04080766, #04080733 40%, #04080788),
     url('/img/lobby-wide.webp') center / cover no-repeat;
 }
 .topbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 20px 4px; color: var(--muted); font-size: .85rem; }
@@ -145,15 +145,15 @@ button.pill.on svg { color: #1b1408; }
 .plate-row { display: flex; align-items: flex-end; gap: 6px; }
 .seat.left .plate-row { flex-direction: row-reverse; }
 .plate {
-  position: relative; min-width: 120px; padding: 6px 14px 6px 52px; text-align: left; border-radius: 14px;
+  position: relative; min-width: 132px; padding: 7px 14px 7px 66px; text-align: left; border-radius: 14px;
   background: var(--glass); border: 1px solid #ffffff14; box-shadow: 0 8px 22px #000b, inset 0 1px 0 #ffffff10;
   transition: border-color .25s, box-shadow .25s, background .25s;
 }
 .plate .avatar {
-  position: absolute; left: 6px; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 50%; object-fit: cover;
+  position: absolute; left: 5px; top: 50%; transform: translateY(-50%); width: 56px; height: 56px; border-radius: 50%; object-fit: cover;
   background: var(--felt-3); border: 2px solid var(--gold); box-shadow: 0 0 0 2px #070c0a, 0 2px 8px #000a;
 }
-.plate .avatar.me { display: flex; align-items: center; justify-content: center; color: var(--gold-hi); font-size: 1.15rem; background: radial-gradient(circle at 35% 30%, #1d5e46, #06281b); }
+.plate .avatar.me { display: flex; align-items: center; justify-content: center; color: var(--gold-hi); font-size: 1.5rem; background: radial-gradient(circle at 35% 30%, #1d5e46, #06281b); }
 .plate .name { font-size: .72rem; color: var(--muted); letter-spacing: .03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px; }
 .plate .stack { font-weight: 700; font-size: 1rem; font-variant-numeric: tabular-nums; letter-spacing: .01em; }
 .seat.hero .plate .name { color: var(--gold); }
@@ -381,10 +381,11 @@ button.act.primary { color: #1b1408; }
   .pot.hint { display: none; }
   .pot-row { min-height: 22px; gap: 4px; }
   .inplay { font-size: .6rem; }
-  .plate { padding: 2px 7px 2px 29px; min-width: 0; max-width: 104px; border-radius: 9px; }
+  .plate { padding: 2px 7px 2px 38px; min-width: 0; max-width: 112px; border-radius: 9px; }
   .plate .name { font-size: .6rem; max-width: 70px; }
   .plate .stack { font-size: .78rem; }
-  .plate .avatar { width: 23px; height: 23px; left: 3px; border-width: 1.5px; box-shadow: none; }
+  .plate .avatar { width: 33px; height: 33px; left: 2px; border-width: 1.5px; box-shadow: none; }
+  .plate .avatar.me { font-size: 1rem; }
   .seat.active .plate::after { inset: -4px; border-radius: 12px; }
   .last { font-size: .54rem; padding: 1px 6px; }
   .timer { width: 80px; height: 13px; font-size: .56rem; }
@@ -455,7 +456,7 @@ button.act.primary { color: #1b1408; }
 
 /* ================= Tournoi ================= */
 .menu-screen.tourney { background-image: radial-gradient(ellipse at 50% 40%, #0000 0%, #04080799 75%), linear-gradient(180deg, #04080744, #040807bb), url('/img/tournament-hall.webp'); }
-.table-screen.tourney { background: radial-gradient(ellipse 70% 60% at 50% 45%, #1a5a4226, #0000 70%), linear-gradient(#040807d9, #040807ee), url('/img/tournament-hall.webp') center / cover no-repeat; }
+.table-screen.tourney { background: radial-gradient(ellipse 80% 75% at 50% 48%, #0000 45%, #040807b0 100%), linear-gradient(#04080766, #04080733 40%, #04080788), url('/img/tournament-hall.webp') center / cover no-repeat; }
 .seat.out { opacity: .35; }
 .seat.out .hole, .seat.out .plate-row > .chipstack, .seat.out .markers { display: none; }
 .last.k-out { color: #ff9a8f; border-color: #ff9a8f55; }
@@ -493,14 +494,14 @@ button.act.primary { color: #1b1408; }
 }
 
 /* ================= Table pleine (8 à 10 joueurs) ================= */
-.crowded .plate { min-width: 104px; padding: 4px 10px 4px 44px; }
-.crowded .plate .avatar { width: 34px; height: 34px; }
+.crowded .plate { min-width: 112px; padding: 5px 10px 5px 56px; }
+.crowded .plate .avatar { width: 47px; height: 47px; }
 .crowded .plate .name { max-width: 84px; }
 .crowded .seat:not(.hero) .plate-row > .chipstack { display: none; }
 .crowded .seat:not(.hero) .card.sm { --w: calc(var(--card-sm) * .85); }
 @media (orientation: landscape) and (max-height: 520px) {
-  .crowded .plate { min-width: 0; max-width: 84px; padding: 1px 5px 1px 24px; }
-  .crowded .plate .avatar { width: 19px; height: 19px; left: 2px; }
+  .crowded .plate { min-width: 0; max-width: 92px; padding: 1px 5px 1px 31px; }
+  .crowded .plate .avatar { width: 27px; height: 27px; left: 2px; }
   .crowded .plate .name { max-width: 52px; font-size: .55rem; }
   .crowded .plate .stack { font-size: .7rem; }
   .crowded .seat:not(.hero) .card.sm { --w: 22px; }
