@@ -23,6 +23,8 @@ export const SOURCES: Record<string, Source> = {
   equityGuide: { name: 'PokerListings : situations d’équité classiques', url: 'https://www.pokerlistings.com/beginners-equity-guide-to-standard-situations-in-no-limit-holdem' },
   potOdds: { name: 'Wikipédia : cote du pot (pot odds)', url: 'https://en.wikipedia.org/wiki/Pot_odds' },
   negreanu: { name: 'Daniel Negreanu (MasterClass) : début et milieu de tournoi', url: 'https://www.masterclass.com/classes/daniel-negreanu-teaches-poker/chapters/tournament-strategy-early-and-middle-stages' },
+  upswingPlo: { name: 'Upswing Poker : les 3 critères des mains de départ en PLO', url: 'https://upswingpoker.com/pot-limit-omaha-starting-hands-plo-preflop-strategy/' },
+  plTop30: { name: 'PokerListings : meilleures mains de départ en Pot Limit Omaha', url: 'https://www.pokerlistings.com/poker-strategies/omaha/potlimit-omaha-starting-hands' },
   mit: { name: 'MIT, cours « Poker Theory and Analytics » : tournois', url: 'https://ocw.mit.edu/courses/15-s50-poker-theory-and-analytics-january-iap-2015/46fde8cc2fdf3e4e0453fe3730680a5e_MIT15_S50IAP15_L5_Tournmt.pdf' },
 };
 
@@ -81,6 +83,16 @@ export const TIPS: { group: string; items: Tip[] }[] = [
       { title: 'Bulle : qui attaque ?', body: 'Le gros tapis attaque les tapis moyens qui veulent entrer dans l’argent. Les tapis moyens jouent prudemment. Remplace les calls par des 3-bets ou des abandons, et défends moins ta grosse blind avec des mains comme QJo ou K10s.', source: 'icmTips' },
       { title: 'Petit tapis à la bulle', body: 'Se coucher a de la valeur (on survit) : un vol doit être plus solide. Dans l’exemple étudié, le bouton à 18 BB n’ouvre que 17 % des mains au lieu de 50 % sans bulle.', source: 'bubbleSteal' },
       { title: 'Fin de tournoi', body: 'Gros tapis : mets la pression sur les tapis moyens et évite les autres gros. Tapis moyen (20-25 BB) : attaque les tapis comparables, évite les calls marginaux contre les petits. Petit tapis (≤ 10 BB) : pousse en visant les tapis moyens.', source: 'rdjFin' },
+    ],
+  },
+  {
+    group: 'Omaha',
+    items: [
+      { title: 'Deux cartes, pas une de plus', body: 'Ta main utilise exactement 2 de tes 4 cartes et 3 du tableau. Quatre piques en main avec un seul pique au tableau ne font pas couleur ; une seule carte de cœur en main avec quatre cœurs au tableau non plus.', source: 'plTop30' },
+      { title: 'Viser le maximum (les « nuts »)', body: 'Avec 4 cartes chacun, les grosses mains sont fréquentes : une couleur faible ou une quinte par le bas perd souvent. Préfère les mains qui font la couleur à l’As et les quintes hautes.', source: 'upswingPlo' },
+      { title: 'Connectées et suitées', body: 'Les meilleures mains ont leurs quatre cartes qui travaillent ensemble : proches pour les quintes, deux à deux de la même couleur (double suitées). Plus de deux cartes d’une même couleur affaiblit la main.', source: 'upswingPlo' },
+      { title: 'Les meilleures mains', body: 'AAKK double suitée est la meilleure main, devant AAJT double suitée. Même elles dépassent rarement 65 % contre une seule autre main : à l’Omaha, personne n’est très favori avant le flop.', source: 'plTop30' },
+      { title: 'Méfie-toi des Rois sans rien', body: 'KK94 sans couleur ni connexion doit presque toujours toucher un brelan pour gagner. Une paire n’a de valeur que bien accompagnée.', source: 'plTop30' },
     ],
   },
 ];

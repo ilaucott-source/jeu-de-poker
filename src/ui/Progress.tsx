@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { clearHistory, loadHands, loadTourneys, type HandRecord } from '../game/history';
 import { POS_SHORT, summarize, summarizeTourneys, type StatLine } from '../game/progress';
 import { ordinalFR } from '../game/tournament';
-import { startingHandName } from '../engine/odds';
+import { handNameFor, VARIANT_FR } from '../engine/variant';
+import type { GameVariant } from '../engine/holdem';
 import { CardView } from './CardView';
 import { HandReview } from './HandReview';
 
@@ -21,12 +22,15 @@ export function Progress({ onClose }: { onClose: () => void }) {
   const [version, setVersion] = useState(0);
 
   const all = useMemo(() => loadHands(), [version]);
+  // par défaut : le jeu de la dernière main jouée (les zones conseillées dépendent du jeu)
+  const [game, setGame] = useState<GameVariant | 'all'>(() => all[all.length - 1]?.game ?? 'holdem');
+  const games = useMemo(() => [...new Set(all.map((h) => h.game ?? 'holdem'))], [all]);
   const hands = useMemo(() => {
-    const f = all.filter((h) => mode === 'all' || h.mode === mode);
+    const f = all.filter((h) => (mode === 'all' || h.mode === mode) && (game === 'all' || (h.game ?? 'holdem') === game));
     return period ? f.slice(-period) : f;
-  }, [all, mode, period]);
-  const s = useMemo(() => summarize(hands), [hands]);
-  const tourneys = useMemo(() => loadTourneys(), [version]);
+  }, [all, mode, period, game]);
+  const s = useMemo(() => summarize(hands, game), [hands, game]);
+  const tourneys = useMemo(() => loadTourneys().filter((x) => game === 'all' || (x.game ?? 'holdem') === game), [version, game]);
   const t = summarizeTourneys(tourneys);
 
   return (
@@ -45,8 +49,15 @@ export function Progress({ onClose }: { onClose: () => void }) {
               </button>
             ))}
           </div>
+          <div className="filters">
+            {games.length > 1 && (
+              <select value={game} onChange={(e) => setGame(e.target.value as GameVariant | 'all')} aria-label="Jeu">
+                {games.map((g) => <option key={g} value={g}>{VARIANT_FR[g]}</option>)}
+                <option value="all">Tous les jeux</option>
+              </select>
+            )}
           {tab !== 'tourneys' && (
-            <div className="filters">
+            <>
               <select value={mode} onChange={(e) => setMode(e.target.value as ModeFilter)} aria-label="Mode">
                 <option value="all">Cash et tournoi</option>
                 <option value="cash">Cash game</option>
@@ -57,8 +68,9 @@ export function Progress({ onClose }: { onClose: () => void }) {
                 <option value={200}>200 dernières mains</option>
                 <option value={0}>Toutes les mains</option>
               </select>
-            </div>
+            </>
           )}
+          </div>
         </div>
 
         {tab === 'stats' &&
@@ -128,9 +140,9 @@ export function Progress({ onClose }: { onClose: () => void }) {
                     <button onClick={() => setOpen(h)}>
                       <span className="hl-cards">{h.heroCards.map((c) => <CardView key={c} card={c} size="sm" />)}</span>
                       <span className="hl-main">
-                        <span><b>{startingHandName(h.heroCards)}</b> · {POS_SHORT[h.heroPos.replace('*', '')] ?? h.heroPos}</span>
+                        <span><b>{handNameFor(h.heroCards)}</b> · {POS_SHORT[h.heroPos.replace('*', '')] ?? h.heroPos}</span>
                         <small>
-                          {new Date(h.ts).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · {h.mode === 'cash' ? 'Cash' : 'Tournoi'}
+                          {new Date(h.ts).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · {h.game === 'omaha' ? 'Omaha · ' : ''}{h.mode === 'cash' ? 'Cash' : 'Tournoi'}
                         </small>
                       </span>
                       <span className="hl-grades">

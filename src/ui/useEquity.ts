@@ -13,8 +13,8 @@ function getWorker() {
 }
 
 /** Calcule l'équité en arrière-plan, pour que l'écran reste fluide. */
-export function useEquity(hole: Card[], board: Card[], ranges: RangeSpec[]) {
-  const key = `${hole.join('')}|${board.join('')}|${JSON.stringify(ranges)}`;
+export function useEquity(hole: Card[], board: Card[], ranges: RangeSpec[], omaha = false) {
+  const key = `${omaha ? 'o' : 'h'}|${hole.join('')}|${board.join('')}|${JSON.stringify(ranges)}`;
   const [res, setRes] = useState<{ key: string; random: number; vsRange: number } | null>(null);
   const want = useRef(key);
   useEffect(() => {
@@ -29,7 +29,7 @@ export function useEquity(hole: Card[], board: Card[], ranges: RangeSpec[]) {
       if (want.current === key) setRes({ key, random: e.data.random, vsRange: e.data.vsRange });
     };
     w.addEventListener('message', onMsg);
-    w.postMessage({ id, hole, board, ranges } satisfies EquityJob);
+    w.postMessage({ id, hole, board, ranges, omaha } satisfies EquityJob);
     return () => w.removeEventListener('message', onMsg);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);

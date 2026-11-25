@@ -1,9 +1,11 @@
 import type { Card } from './cards';
-import { CATEGORY_NAMES_FR, evaluateBest } from './evaluator';
 import { applyAction, legalActions, potTotal, startHand, type HandConfig, type HandState, type PlayerAction, type SeatInput, type Street } from './holdem';
-import { outs, startingHandName } from './odds';
-import { ADVICE_FR, equityVsRanges, estimateRanges, positionOf, POSITION_FR, preflopChart, type Advice } from './ranges';
+import { startingHandName } from './odds';
+import { ADVICE_FR, estimateRanges, positionOf, POSITION_FR, preflopChart, type Advice } from './ranges';
 import { callPrice, effectiveBB, stageOf } from './tourney';
+import { omahaLabel, omahaTop } from './omaha';
+import { omahaPreflopChart } from './omahaAdvice';
+import { equityFor, madeHandFr, outsFor, variantOf } from './variant';
 
 /** De quoi rejouer une main à l'identique : sièges, réglages (avec la graine du paquet) et actions. */
 export interface HandScript {
@@ -83,14 +85,16 @@ export function analyzeHand(script: HandScript, heroId: string, iterations = 500
     const played = playedFr(a, legal.isBet);
     const kind = kindOf(a);
     const hole = me.holeCards as Card[];
-    const name = startingHandName(hole);
+    const variant = variantOf(st);
+    const omaha = variant === 'omaha';
+    const name = omaha ? omahaLabel(hole) : startingHandName(hole);
 
     if (st.street === 'preflop') {
-      const chart = preflopChart(st, st.toAct);
+      const chart = omaha ? omahaPreflopChart(st, st.toAct) : preflopChart(st, st.toAct);
       if (!chart) return;
       // face à un tapis (ou quand plus personne ne peut payer une relance), relancer est impossible ou inutile : seul compte payer ou se coucher
       const noRaise = !legal.canBetOrRaise;
-      const adv0 = chart.advise(name);
+      const adv0 = 'adviseTop' in chart ? chart.adviseTop(omahaTop(hole)) : chart.advise(name);
       const adv: Advice = noRaise && (adv0 === 'raise' || adv0 === 'bluff') ? (adv0 === 'raise' ? 'call' : 'fold') : adv0;
       const pos = POSITION_FR[positionOf(st, st.toAct)];
       const info = stageOf(st);
@@ -120,11 +124,11 @@ export function analyzeHand(script: HandScript, heroId: string, iterations = 500
     const ranges = estimateRanges(st, heroId).map((r) => ({ top: r.top, post: r.post }));
     if (!ranges.length) return;
     const info = stageOf(st);
-    const e = equityVsRanges(hole, st.board, ranges, iterations, 17 + k);
+    const e = equityFor(variant, hole, st.board, ranges, iterations, 17 + k);
     const fair = 1 / (ranges.length + 1);
     const pot = potTotal(st);
-    const draws = st.board.length < 5 ? outs(hole, st.board).length : 0;
-    const made = CATEGORY_NAMES_FR[evaluateBest([...hole, ...st.board]).category];
+    const draws = st.board.length < 5 ? outsFor(variant, hole, st.board).length : 0;
+    const made = madeHandFr(variant, hole, st.board);
     const base = `Avec ${made.toLowerCase()}, tu avais environ ${pct(e)} de chances de gagner`;
 
     if (legal.callAmount > 0) {

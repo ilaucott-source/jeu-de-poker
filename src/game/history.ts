@@ -1,7 +1,7 @@
 import type { Card } from '../engine/cards';
 import type { Decision, HandScript } from '../engine/analysis';
 import { scriptActions } from '../engine/analysis';
-import type { HandState } from '../engine/holdem';
+import type { GameVariant, HandState } from '../engine/holdem';
 import { positionOf } from '../engine/ranges';
 
 /** Une main jouée, gardée sur l'appareil pour l'historique et les statistiques. */
@@ -10,6 +10,8 @@ export interface HandRecord {
   id: string;
   ts: number;
   mode: 'cash' | 'tournament';
+  /** jeu (absent = Texas Hold'em, pour les mains enregistrées avant l'Omaha) */
+  game?: GameVariant;
   script: HandScript;
   heroId: string;
   heroCards: Card[];
@@ -44,6 +46,7 @@ export interface TourneyRecord {
   players: number;
   hands: number;
   level: string;
+  game?: GameVariant;
 }
 
 type Change = { kind: 'hand'; hand: HandRecord } | { kind: 'tourney'; t: TourneyRecord } | { kind: 'clear' };
@@ -129,6 +132,7 @@ export function recordFromHand(final: HandState, script: Omit<HandScript, 'actio
   const heroIdx = final.players.findIndex((p) => p.id === heroId);
   const hero = final.players[heroIdx];
   if (!hero || hero.out || hero.holeCards.length < 2) return null;
+  const game = final.config.variant ?? 'holdem';
   const startStack = script.seats.find((s) => s.id === heroId)!.stack;
   const actions = scriptActions(final);
   const mine = final.log.filter((a) => a.playerId === heroId && a.type !== 'post');
@@ -155,6 +159,7 @@ export function recordFromHand(final: HandState, script: Omit<HandScript, 'actio
     id: `${Date.now().toString(36)}-${final.config.seed.toString(36)}`,
     ts: Date.now(),
     mode,
+    game,
     script: { ...script, actions },
     heroId,
     heroCards: hero.holeCards,

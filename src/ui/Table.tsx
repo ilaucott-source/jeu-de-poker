@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { evaluateBest, describeHand } from '../engine/evaluator';
+import { describeHand } from '../engine/evaluator';
+import { bestHand, variantOf } from '../engine/variant';
 import { legalActions, potTotal } from '../engine/holdem';
 import { avatarFor, HERO_ID, useCashGame, type CashGameOptions } from '../game/useCashGame';
 import { CardView } from './CardView';
@@ -16,6 +17,7 @@ import { betPos, isCompactLandscape, seatPos } from './layout';
 import { isMuted, playBoard, playCheck, playChips, playDeal, playFold, playWin, setMuted, unlockAudio } from '../game/sound';
 
 const STRUCTURE_FR = { NL: 'No Limit', PL: 'Pot Limit', FL: 'Limit' };
+const GAME_SHORT = { holdem: '', omaha: 'Omaha ' };
 const ACTION_FR: Record<string, string> = { fold: 'Couché', check: 'Parole', call: 'Suit', bet: 'Mise', raise: 'Relance', post: 'Blind' };
 
 export function Table({ options, onQuit, onReplay, resume }: { options: CashGameOptions; onQuit: () => void; onReplay: () => void; resume?: SavedGame | null }) {
@@ -70,7 +72,7 @@ export function Table({ options, onQuit, onReplay, resume }: { options: CashGame
   }, [hand]);
 
   const hero = hand?.players.find((p) => p.id === HERO_ID);
-  const heroHand = hero && hand && hand.board.length >= 3 && !hero.folded ? describeHand(evaluateBest([...hero.holeCards, ...hand.board])) : null;
+  const heroHand = hero && hand && hand.board.length >= 3 && !hero.folded ? describeHand(bestHand(variantOf(hand), hero.holeCards, hand.board)) : null;
   const done = !hand || hand.street === 'complete';
   const timer = useDecisionTimer(options.timer, !!heroTurn && !done, `${handNo}-${hand?.log.length ?? 0}`, handNo, () => {
     const l = hand ? legalActions(hand) : null;
@@ -155,7 +157,7 @@ export function Table({ options, onQuit, onReplay, resume }: { options: CashGame
   const nSeats = hand?.players.length ?? options.bots + 1;
 
   return (
-    <div className={`table-screen ${showOdds ? 'with-stats' : ''} ${tourney ? 'tourney' : ''}`} onPointerDown={unlockAudio}>
+    <div className={`table-screen ${showOdds ? 'with-stats' : ''} ${tourney ? 'tourney' : ''} game-${options.variant ?? 'holdem'}`} onPointerDown={unlockAudio}>
       <div className="rotate-hint" role="alert">
         <div className="phone" aria-hidden="true" />
         <p>Tourne ton téléphone pour jouer</p>
@@ -166,13 +168,13 @@ export function Table({ options, onQuit, onReplay, resume }: { options: CashGame
         <span className="title">
           {tourney ? (
             <>
-              <b>Tournoi</b> · Niveau {game.levelIndex + 1} · {game.level.sb}/{game.level.bb}
+              <b>{options.variant === 'omaha' ? 'Tournoi Omaha' : 'Tournoi'}</b> · Niveau {game.levelIndex + 1} · {game.level.sb}/{game.level.bb}
               {game.level.ante > 0 && <> · ante {game.level.ante}</>}
               <span className="bank"> · hausse dans {game.handsLeftInLevel + 1} main{game.handsLeftInLevel ? 's' : ''}</span> · {game.alive}/{game.total} joueurs
             </>
           ) : (
             <>
-              <b>{STRUCTURE_FR[options.structure]}</b> · Blinds {bb / 2}/{bb} · Main n°{handNo}
+              <b>{GAME_SHORT[options.variant ?? 'holdem']}{STRUCTURE_FR[options.structure]}</b> · Blinds {bb / 2}/{bb} · Main n°{handNo}
             </>
           )}
           {timer.enabled && <span className="bank"> · Banque {Math.ceil(timer.bank)} s</span>}
@@ -199,7 +201,7 @@ export function Table({ options, onQuit, onReplay, resume }: { options: CashGame
             const won = hand!.results?.reduce((s, r) => s + (r.shares[p.id] ?? 0), 0) ?? 0;
             return (
               <div key={p.id} style={{ left: `${seatPos(nSeats, i, compact)[0]}%`, top: `${seatPos(nSeats, i, compact)[1]}%` }} className={`seat pos${i} ${!p.folded && !p.out && hand!.street !== 'complete' ? 'in-hand' : ''} ${p.allIn && !p.folded ? 'allin' : ''} ${seatPos(nSeats, i, compact)[0] > 50 ? 'right' : seatPos(nSeats, i, compact)[0] < 50 ? 'left' : 'mid'} ${p.folded ? 'folded' : ''} ${hand!.toAct === i ? 'active' : ''} ${isHero ? 'hero' : ''} ${p.out ? 'out' : ''}`}>
-                <div className="hole">
+                <div className={`hole n${p.holeCards.length}`}>
                   {p.holeCards.map((c, k) => <CardView key={`${handNo}-${k}`} card={c} hidden={!reveal} size={isHero ? 'lg' : 'sm'} delay={k * 120} />)}
                 </div>
                 {isHero && heroTurn && timer.enabled && (

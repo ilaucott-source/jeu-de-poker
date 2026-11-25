@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
 import { analyzeHand, ANALYSIS_VERSION, replay, type Decision } from '../engine/analysis';
-import { describeHand, evaluateBest } from '../engine/evaluator';
+import { describeHand } from '../engine/evaluator';
+import { bestHand, handNameFor } from '../engine/variant';
+import { omahaLabel } from '../engine/omaha';
 import type { Street } from '../engine/holdem';
 import { POSITION_FR } from '../engine/ranges';
-import { startingHandName } from '../engine/odds';
 import { updateHand, type HandRecord } from '../game/history';
 import { CardView } from './CardView';
 
@@ -45,7 +46,7 @@ export function HandReview({ record, onClose }: { record: HandRecord; onClose: (
     return { decisions, streets, final, shown, winners };
   }, [record]);
 
-  const heroHand = record.board.length >= 3 ? describeHand(evaluateBest([...record.heroCards, ...record.board])) : null;
+  const heroHand = record.board.length >= 3 ? describeHand(bestHand(record.game ?? 'holdem', record.heroCards, record.board)) : null;
   const g = { good: 0, ok: 0, mistake: 0 };
   for (const d of data.decisions) g[d.grade]++;
 
@@ -57,7 +58,7 @@ export function HandReview({ record, onClose }: { record: HandRecord; onClose: (
             {record.heroCards.map((c) => <CardView key={c} card={c} size="sm" />)}
           </div>
           <div className="review-title">
-            <b>{startingHandName(record.heroCards)}</b> · {POSITION_FR[record.heroPos] ?? record.heroPos}
+            <b>{record.heroCards.length === 4 ? omahaLabel(record.heroCards) : handNameFor(record.heroCards)}</b> · {POSITION_FR[record.heroPos] ?? record.heroPos}
             <div className={`review-net ${record.net > 0 ? 'good' : record.net < 0 ? 'bad' : ''}`}>
               {record.net > 0 ? '+' : ''}
               {record.net} jetons ({fmtBB(record.net / record.bb)})
