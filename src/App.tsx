@@ -5,6 +5,8 @@ import { LEVEL_FR, pickBots, type BotLevel } from './engine/bots';
 import { SPEED, type TourneySpeed } from './game/tournament';
 import { Table } from './ui/Table';
 import { Progress } from './ui/Progress';
+import { SyncPanel } from './ui/SyncPanel';
+import { startSync, syncAvailable, useSyncStatus } from './sync/cloud';
 import { clearGame, loadGame, onSaveChange, type SavedGame } from './game/save';
 import { PACE, type BotPace } from './engine/thinking';
 import { TIMER_PRESETS, type TimerPreset } from './game/timer';
@@ -41,6 +43,9 @@ export default function App() {
   const [game, setGame] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(false);
+  const [syncOpen, setSyncOpen] = useState(false);
+  const sync = useSyncStatus();
+  useEffect(() => startSync(), []);
   const [saved, setSaved] = useState<SavedGame | null>(() => loadGame());
   const [resumeGame, setResumeGame] = useState<SavedGame | null>(null);
   useEffect(() => {
@@ -185,6 +190,12 @@ export default function App() {
           {saved ? 'Nouvelle partie' : 'Jouer'}
         </button>
         <button className="progress-link" onClick={() => setProgress(true)}>Ma progression · statistiques et analyse des mains</button>
+        {syncAvailable && (
+          <button className="progress-link sync-link" onClick={() => setSyncOpen(true)}>
+            {sync.user ? `☁︎ Synchronisé · ${sync.user.email}` : '☁︎ Retrouver mes parties sur tous mes appareils'}
+          </button>
+        )}
+        {syncOpen && <SyncPanel onClose={() => setSyncOpen(false)} />}
       </div>
     </div>
   );

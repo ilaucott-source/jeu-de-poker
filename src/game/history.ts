@@ -44,6 +44,15 @@ export interface TourneyRecord {
   level: string;
 }
 
+type Change = { kind: 'hand'; hand: HandRecord } | { kind: 'tourney'; t: TourneyRecord } | { kind: 'clear' };
+const changeListeners = new Set<(c: Change) => void>();
+/** Prévient la synchronisation de chaque nouvelle main enregistrée. */
+export const onHistoryChange = (l: (c: Change) => void) => {
+  changeListeners.add(l);
+  return () => changeListeners.delete(l);
+};
+const emit = (c: Change) => changeListeners.forEach((l) => l(c));
+
 const HANDS_KEY = 'poker-history';
 const TOURNEY_KEY = 'poker-tourneys';
 const MAX_HANDS = 600;
@@ -75,6 +84,25 @@ export function saveHand(r: HandRecord) {
   const list = loadHands().filter((x) => x.id !== r.id);
   list.push(r);
   write(HANDS_KEY, list.slice(-MAX_HANDS));
+  emit({ kind: 'hand', hand: r });
+}
+
+/** Fusionne des mains venues d'un autre appareil (sans doublon), dans l'ordre chronologique. */
+export function mergeHands(remote: HandRecord[]) {
+  const map = new Map(loadHands().map((h) => [h.id, h]));
+  let added = 0;
+  for (const r of remote) {
+    const cur = map.get(r.id);
+    if (!cur) added++;
+    if (!cur || (!cur.decisions && r.decisions)) map.set(r.id, r);
+  }
+  write(HANDS_KEY, [...map.values()].sort((a, b) => a.ts - b.ts).slice(-MAX_HANDS));
+  return added;
+}
+export function mergeTourneys(remote: TourneyRecord[]) {
+  const map = new Map(loadTourneys().map((t) => [t.ts, t]));
+  for (const r of remote) map.set(r.ts, r);
+  write(TOURNEY_KEY, [...map.values()].sort((a, b) => a.ts - b.ts).slice(-200));
 }
 export function updateHand(id: string, patch: Partial<HandRecord>) {
   const list = loadHands();
@@ -82,13 +110,16 @@ export function updateHand(id: string, patch: Partial<HandRecord>) {
   if (i < 0) return;
   list[i] = { ...list[i], ...patch };
   write(HANDS_KEY, list);
+  emit({ kind: 'hand', hand: list[i] });
 }
 export function saveTourney(t: TourneyRecord) {
   write(TOURNEY_KEY, [...loadTourneys(), t].slice(-200));
+  emit({ kind: 'tourney', t });
 }
 export function clearHistory() {
   write(HANDS_KEY, []);
   write(TOURNEY_KEY, []);
+  emit({ kind: 'clear' });
 }
 
 /** Construit l'enregistrement d'une main terminée. */

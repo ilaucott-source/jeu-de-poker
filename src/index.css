@@ -662,3 +662,15 @@ button.act.primary { color: #1b1408; }
   .menu.has-save .brand { display: none; }
   .menu.has-save { padding-top: 4px; padding-bottom: 4px; gap: 5px 14px; }
 }
+.sync-card { max-width: 440px; }
+.sync-form { display: flex; flex-direction: column; gap: 10px; }
+.sync-form input { font: inherit; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: #0c1512; color: var(--ink); }
+.sync-msg { color: #f0c070; font-size: .85rem; margin: 0; }
+.sync-card .note { color: var(--muted); font-size: .8rem; margin: 0 0 12px; }
+.sync-link { color: var(--muted); }
+@media (orientation: landscape) and (min-height: 521px) { .menu > .sync-link { grid-column: 1 / -1; } }
+@media (orientation: landscape) and (max-height: 520px) {
+  .sync-card { display: block; }
+  .sync-form { gap: 6px; } .sync-form input { padding: 7px 10px; }
+  .menu > .sync-link { grid-column: 1 / -1; padding: 5px; }
+}
