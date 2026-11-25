@@ -27,6 +27,16 @@ export interface StatLine {
 
 const ratio = (a: number, b: number) => (b > 0 ? a / b : null);
 
+/** Zones conseillées au 2-7 Triple Draw (Limit : on joue peu de mains, on relance plus qu'on ne suit). */
+const DRAW27_ZONES: Record<string, { lo: number; hi: number; low?: string; high?: string }> = {
+  vpip: { lo: 0.2, hi: 0.32, high: 'Tu joues trop de mains : au 2-7, tirer 3 cartes ou garder des cartes au-dessus de 8 coûte cher sur trois tours d’enchères.' },
+  pfr: { lo: 0.14, hi: 0.26 },
+  '3bet': { lo: 0.05, hi: 0.12, low: 'Tu sur-relances rarement : avec une main faite à 8 ou un tirage à 1 carte vers 7, sur-relance.' },
+  af: { lo: 1.2, hi: 3 },
+  wtsd: { lo: 0.3, hi: 0.45 },
+  wsd: { lo: 0.45, hi: 0.58 },
+};
+
 export function summarize(hands: HandRecord[], game: GameVariant | 'all' = 'holdem') {
   const n = hands.length;
   const netBB = hands.reduce((s, h) => s + h.net / h.bb, 0);
@@ -73,9 +83,9 @@ export function summarize(hands: HandRecord[], game: GameVariant | 'all' = 'hold
     },
   ];
 
-  if (game === 'omaha')
+  if (game === 'omaha' || game === 'draw27')
     for (const l of lines) {
-      const z = OMAHA_ZONES[l.key];
+      const z = (game === 'omaha' ? OMAHA_ZONES : DRAW27_ZONES)[l.key];
       if (z) Object.assign(l, { lo: z.lo, hi: z.hi }, z.low ? { low: z.low } : {}, z.high ? { high: z.high } : {});
     }
 
@@ -125,5 +135,8 @@ export const MISTAKE_FR: Record<string, { label: string; tip: string }> = {
   'missed-value': { label: 'Mises de valeur manquées', tip: 'Quand tu as probablement la meilleure main, mise : les mains moins fortes te paieront.' },
   'multi-bluff': { label: 'Bluffs contre plusieurs adversaires', tip: 'Garde tes bluffs pour les coups à un seul adversaire.' },
   'bluff-raise': { label: 'Relances en bluff', tip: 'Bien, mais pas contre les joueurs qui paient tout (Le Débutant, Le Fêtard).' },
+  'draw-pat': { label: 'Servi avec une main trop faible (2-7)', tip: 'Reste servi seulement avec une main faite à 9 ou mieux (10 au dernier tirage) ; sinon change tes cartes hautes.' },
+  'draw-too-many': { label: 'Trop de cartes changées (2-7)', tip: 'Garde tes cartes basses différentes : tirer 3 cartes au lieu de 2 fait chuter tes chances.' },
+  'draw-keep-high': { label: 'Cartes trop hautes gardées (2-7)', tip: 'Au 2-7, une carte au-dessus de 8 est presque toujours à changer, sauf au dernier tirage avec une main faite.' },
   'weak-bet': { label: 'Mises sans grosse main', tip: 'Choisis tes bluffs : un seul adversaire, une carte qui fait peur, une histoire cohérente.' },
 };

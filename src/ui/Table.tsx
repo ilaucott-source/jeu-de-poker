@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { describeHand } from '../engine/evaluator';
 import { bestHand, variantOf } from '../engine/variant';
+import { isDrawing } from '../engine/holdem';
+import { planDraw } from '../engine/lowball';
+import { drawsLeft } from '../engine/draw27';
+import { DrawPanel } from './DrawPanel';
 import { legalActions, potTotal } from '../engine/holdem';
 import { avatarFor, HERO_ID, useCashGame, type CashGameOptions } from '../game/useCashGame';
 import { CardView } from './CardView';
@@ -17,8 +21,9 @@ import { betPos, isCompactLandscape, seatPos } from './layout';
 import { isMuted, playBoard, playCheck, playChips, playDeal, playFold, playWin, setMuted, unlockAudio } from '../game/sound';
 
 const STRUCTURE_FR = { NL: 'No Limit', PL: 'Pot Limit', FL: 'Limit' };
-const GAME_SHORT = { holdem: '', omaha: 'Omaha ' };
-const ACTION_FR: Record<string, string> = { fold: 'Couché', check: 'Parole', call: 'Suit', bet: 'Mise', raise: 'Relance', post: 'Blind' };
+const GAME_SHORT = { holdem: '', omaha: 'Omaha ', draw27: '2-7 Triple Draw · ' };
+const ACTION_FR: Record<string, string> = { fold: 'Couché', check: 'Parole', call: 'Suit', bet: 'Mise', raise: 'Relance', post: 'Blind', draw: 'Change' };
+const DRAW_STAGE = { preflop: 'Avant le 1er tirage', flop: '1er tirage', turn: '2e tirage', river: '3e et dernier tirage' } as Record<string, string>;
 
 export function Table({ options, onQuit, onReplay, resume }: { options: CashGameOptions; onQuit: () => void; onReplay: () => void; resume?: SavedGame | null }) {
   const game = useCashGame(options, resume);
@@ -65,6 +70,7 @@ export function Table({ options, onQuit, onReplay, resume }: { options: CashGame
     for (const a of hand.log) {
       if (a.street !== hand.street && hand.street !== 'complete') continue;
       if (a.type === 'post') m[a.playerId] = a.label === 'petite blind' ? `SB ${a.amount}` : a.label === 'grosse blind' ? `BB ${a.amount}` : `Ante ${a.amount}`;
+      else if (a.type === 'draw') m[a.playerId] = a.amount ? `Change ${a.amount}` : 'Servi';
       else m[a.playerId] = ACTION_FR[a.type] + (a.amount ? ` ${a.amount}` : '');
       kind[a.playerId] = a.type;
     }
@@ -72,9 +78,22 @@ export function Table({ options, onQuit, onReplay, resume }: { options: CashGame
   }, [hand]);
 
   const hero = hand?.players.find((p) => p.id === HERO_ID);
-  const heroHand = hero && hand && hand.board.length >= 3 && !hero.folded ? describeHand(bestHand(variantOf(hand), hero.holeCards, hand.board)) : null;
+  const draw27 = options.variant === 'draw27';
+  const heroHand = hero && hand && (hand.board.length >= 3 || draw27) && !hero.folded && hero.holeCards.length ? describeHand(bestHand(variantOf(hand), hero.holeCards, hand.board)) : null;
+  const heroDrawing = !!hand && heroTurn && isDrawing(hand);
+  // 2-7 : cartes que le joueur a choisi de jeter
+  const [picked, setPicked] = useState<number[]>([]);
+  const drawKey = hand ? `${handNo}-${hand.street}-${heroDrawing}` : '';
+  useEffect(() => setPicked([]), [drawKey]);
+  const togglePick = (k: number) => setPicked((x) => (x.includes(k) ? x.filter((i) => i !== k) : [...x, k]));
   const done = !hand || hand.street === 'complete';
   const timer = useDecisionTimer(options.timer, !!heroTurn && !done, `${handNo}-${hand?.log.length ?? 0}`, handNo, () => {
+    if (hand && isDrawing(hand)) {
+      // temps écoulé pendant un tirage : on applique le tirage conseillé
+      const me = hand.players[hand.toAct!];
+      act({ type: 'draw', discard: planDraw(me.holeCards, drawsLeft(hand)) });
+      return;
+    }
     const l = hand ? legalActions(hand) : null;
     if (!l) return;
     act(l.canCheck ? { type: 'check' } : { type: 'fold' });
@@ -96,6 +115,10 @@ export function Table({ options, onQuit, onReplay, resume }: { options: CashGame
     if (last) {
       if (last.type === 'fold') playFold();
       else if (last.type === 'check') playCheck();
+      else if (last.type === 'draw') {
+        if (last.amount) playDeal();
+        else playCheck();
+      }
       else playChips(last.amount / bb);
     }
     if (hand.board.length > heard.current.board && hand.street !== 'complete') {
@@ -202,7 +225,15 @@ export function Table({ options, onQuit, onReplay, resume }: { options: CashGame
             return (
               <div key={p.id} style={{ left: `${seatPos(nSeats, i, compact)[0]}%`, top: `${seatPos(nSeats, i, compact)[1]}%` }} className={`seat pos${i} ${!p.folded && !p.out && hand!.street !== 'complete' ? 'in-hand' : ''} ${p.allIn && !p.folded ? 'allin' : ''} ${seatPos(nSeats, i, compact)[0] > 50 ? 'right' : seatPos(nSeats, i, compact)[0] < 50 ? 'left' : 'mid'} ${p.folded ? 'folded' : ''} ${hand!.toAct === i ? 'active' : ''} ${isHero ? 'hero' : ''} ${p.out ? 'out' : ''}`}>
                 <div className={`hole n${p.holeCards.length}`}>
-                  {p.holeCards.map((c, k) => <CardView key={`${handNo}-${k}`} card={c} hidden={!reveal} size={isHero ? 'lg' : 'sm'} delay={k * 120} />)}
+                  {p.holeCards.map((c, k) =>
+                    isHero && heroDrawing ? (
+                      <button key={`${handNo}-${c}`} className={`pick ${picked.includes(k) ? 'on' : ''}`} onClick={() => togglePick(k)} aria-pressed={picked.includes(k)} aria-label={picked.includes(k) ? 'carte à changer' : 'carte gardée'}>
+                        <CardView card={c} size="lg" />
+                      </button>
+                    ) : (
+                      <CardView key={draw27 ? `${handNo}-${c}` : `${handNo}-${k}`} card={c} hidden={!reveal} size={isHero ? 'lg' : 'sm'} delay={draw27 && hand!.street !== 'preflop' ? 0 : k * 120} />
+                    ),
+                  )}
                 </div>
                 {isHero && heroTurn && timer.enabled && (
                   <div className={`timer ${timer.urgent ? 'urgent' : ''} ${timer.usingBank ? 'bank' : ''}`}>
@@ -243,9 +274,20 @@ export function Table({ options, onQuit, onReplay, resume }: { options: CashGame
           {flights.map((f) => <FlyingChips key={f.id} f={f} unit={unit} onDone={landed} />)}
         </div>
         <div className="center">
-          <div className="board">
-            {[0, 1, 2, 3, 4].map((k) => (hand?.board[k] ? <CardView key={`${handNo}-b${k}`} card={hand.board[k]} size="md" delay={k < 3 ? k * 90 : 0} /> : <div key={k} className="card slot md" />))}
-          </div>
+          {draw27 ? (
+            <div className="draw-stage">
+              <span className="draw-dots" aria-hidden="true">
+                {[1, 2, 3].map((k) => <i key={k} className={hand && drawsDone(hand.street, isDrawing(hand)) >= k ? 'on' : ''} />)}
+              </span>
+              <b className="short">{hand ? (isDrawing(hand) ? `Tirage ${Math.ceil(drawsDone(hand.street, true))} sur 3` : hand.street === 'preflop' ? 'Avant le 1er tirage' : hand.street === 'complete' || hand.street === 'showdown' ? 'Main terminée' : `Enchères · ${Math.ceil(drawsDone(hand.street, false))} tirage${hand.street === 'flop' ? '' : 's'} fait${hand.street === 'flop' ? '' : 's'}`) : '2-7'}</b>
+              <b className="long">{hand ? (isDrawing(hand) ? `${DRAW_STAGE[hand.street]} : chacun change ses cartes` : hand.street === 'preflop' ? 'Enchères avant le 1er tirage' : hand.street === 'complete' || hand.street === 'showdown' ? 'Main terminée' : `Enchères après le ${DRAW_STAGE[hand.street]}`) : '2-7 Triple Draw'}</b>
+              <small>La main la plus basse gagne · 7-5-4-3-2 est la meilleure</small>
+            </div>
+          ) : (
+            <div className="board">
+              {[0, 1, 2, 3, 4].map((k) => (hand?.board[k] ? <CardView key={`${handNo}-b${k}`} card={hand.board[k]} size="md" delay={k < 3 ? k * 90 : 0} /> : <div key={k} className="card slot md" />))}
+            </div>
+          )}
           <div className="pot-row">
             <div className="pot-chips" ref={potRef}>{collected > 0 && <ChipStack amount={collected} unit={unit} small={compact} />}</div>
             {hand && !done && <div className="pot"><small>Pot</small> {potTotal(hand)}</div>}
@@ -281,12 +323,20 @@ export function Table({ options, onQuit, onReplay, resume }: { options: CashGame
               <button className="primary" onClick={deal}>{hand ? 'Main suivante' : 'Distribuer'}</button>
             </div>
           )
+        ) : heroDrawing && hero ? (
+          <DrawPanel hand={hand!} hole={hero.holeCards} picked={picked} onPick={setPicked} onDraw={(d) => act({ type: 'draw', discard: d })} />
         ) : heroTurn && legal ? (
           <BetPanel hand={hand!} legal={legal} allIn={hero!.stack + hero!.bet} onAct={act} onAmount={setRaiseTo} />
         ) : (
-          <span className="waiting">Les adversaires réfléchissent…</span>
+          <span className="waiting">{hand && isDrawing(hand) ? 'Les adversaires changent leurs cartes…' : 'Les adversaires réfléchissent…'}</span>
         )}
       </footer>
     </div>
   );
+}
+
+/** Nombre de tirages déjà commencés (2-7). */
+function drawsDone(street: string, drawing: boolean): number {
+  const base = { preflop: 0, flop: 1, turn: 2, river: 3, showdown: 3, complete: 3 }[street] ?? 0;
+  return drawing ? base - 0.5 : base;
 }

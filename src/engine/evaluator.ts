@@ -27,6 +27,8 @@ export const CATEGORY_NAMES_FR: Record<HandCategory, string> = {
 
 export interface HandValue {
   category: HandCategory;
+  /** description propre au jeu (2-7 : « Main à 8 : 8-6-5-3-2 ») */
+  label?: string;
   /** Score comparable : plus grand = meilleure main. */
   score: number;
   /** Les 5 cartes qui forment la main. */
@@ -105,7 +107,7 @@ const SV: Record<string, number> = {};
 }));
 
 /** Score seul d'une main de 5 cartes (identique à evaluate5(...).score), sans allocation inutile : pour les simulations. */
-export function score5(c0: Card, c1: Card, c2: Card, c3: Card, c4: Card): number {
+export function score5(c0: Card, c1: Card, c2: Card, c3: Card, c4: Card, wheel = true): number {
   const v = [RV[c0], RV[c1], RV[c2], RV[c3], RV[c4]];
   // tri décroissant par insertion
   for (let i = 1; i < 5; i++) {
@@ -123,7 +125,7 @@ export function score5(c0: Card, c1: Card, c2: Card, c3: Card, c4: Card): number
   let sHigh = 0;
   if (distinct) {
     if (v[0] - v[4] === 4) sHigh = v[0];
-    else if (v[0] === 14 && v[1] === 5 && v[4] === 2) sHigh = 5;
+    else if (wheel && v[0] === 14 && v[1] === 5 && v[4] === 2) sHigh = 5;
   }
   const B = 759375; // 15^5
   if (sHigh) return (flush ? 8 : 4) * B + sHigh * 50625;
@@ -232,5 +234,5 @@ export function evaluateOmaha(hole: Card[], board: Card[]): HandValue {
 }
 
 export function describeHand(v: HandValue): string {
-  return CATEGORY_NAMES_FR[v.category];
+  return v.label ?? CATEGORY_NAMES_FR[v.category];
 }

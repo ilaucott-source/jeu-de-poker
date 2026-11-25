@@ -13,6 +13,11 @@ export const PACE: Record<BotPace, { label: string; factor: number; hint: string
  * se coucher avec une main faible est rapide, payer ou relancer un gros pot prend du temps.
  */
 export function thinkTime(state: HandState, style: BotStyle, action: PlayerAction, pace: BotPace, rng: () => number = Math.random): number {
+  if (action.type === 'draw') {
+    // 2-7 : choisir ses cartes à changer va vite, sauf les décisions serrées (casser une main faite)
+    const s = (action.discard.length === 0 ? 1.2 : 1 + action.discard.length * 0.35) + rng() * 1.5;
+    return Math.round(Math.min(6, s * PACE[pace].factor) * 1000);
+  }
   const legal = legalActions(state)!;
   const me = state.players[state.toAct!];
   const bb = state.config.bigBlind;
@@ -36,7 +41,7 @@ export function thinkTime(state: HandState, style: BotStyle, action: PlayerActio
       s = (preflop ? 1.6 : 2.4) + rng() * 2.4 + pressure * 3;
       break;
     default:
-      s = (preflop ? 2 : 2.8) + rng() * 2.6 + Math.min(1, (action.to - state.currentBet) / Math.max(pot, bb)) * 1.5;
+      s = (preflop ? 2 : 2.8) + rng() * 2.6 + Math.min(1, ((action as { to: number }).to - state.currentBet) / Math.max(pot, bb)) * 1.5;
   }
   // les grosses décisions : river, tapis, gros pot
   if (state.street === 'river' && action.type !== 'check') s += 1 + rng() * 1.5;

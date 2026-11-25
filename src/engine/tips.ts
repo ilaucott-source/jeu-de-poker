@@ -25,6 +25,9 @@ export const SOURCES: Record<string, Source> = {
   negreanu: { name: 'Daniel Negreanu (MasterClass) : début et milieu de tournoi', url: 'https://www.masterclass.com/classes/daniel-negreanu-teaches-poker/chapters/tournament-strategy-early-and-middle-stages' },
   upswingPlo: { name: 'Upswing Poker : les 3 critères des mains de départ en PLO', url: 'https://upswingpoker.com/pot-limit-omaha-starting-hands-plo-preflop-strategy/' },
   plTop30: { name: 'PokerListings : meilleures mains de départ en Pot Limit Omaha', url: 'https://www.pokerlistings.com/poker-strategies/omaha/potlimit-omaha-starting-hands' },
+  wiki27: { name: 'Wikipédia : Lowball (2-7 / Deuce to Seven)', url: 'https://en.wikipedia.org/wiki/Lowball_(poker)' },
+  pn27: { name: 'PokerNews : règles et conseils du 2-7 Triple Draw', url: 'https://www.pokernews.com/poker-rules/deuce7triple-draw.htm' },
+  tpt27: { name: 'Forum TwoPlusTwo : quelles mains jouer avant le tirage en 2-7 Triple Draw', url: 'https://forumserver.twoplustwo.com/21/other-poker-games/preflop-2-7tdl-hand-chart-1321373/' },
   mit: { name: 'MIT, cours « Poker Theory and Analytics » : tournois', url: 'https://ocw.mit.edu/courses/15-s50-poker-theory-and-analytics-january-iap-2015/46fde8cc2fdf3e4e0453fe3730680a5e_MIT15_S50IAP15_L5_Tournmt.pdf' },
 };
 
@@ -93,6 +96,16 @@ export const TIPS: { group: string; items: Tip[] }[] = [
       { title: 'Connectées et suitées', body: 'Les meilleures mains ont leurs quatre cartes qui travaillent ensemble : proches pour les quintes, deux à deux de la même couleur (double suitées). Plus de deux cartes d’une même couleur affaiblit la main.', source: 'upswingPlo' },
       { title: 'Les meilleures mains', body: 'AAKK double suitée est la meilleure main, devant AAJT double suitée. Même elles dépassent rarement 65 % contre une seule autre main : à l’Omaha, personne n’est très favori avant le flop.', source: 'plTop30' },
       { title: 'Méfie-toi des Rois sans rien', body: 'KK94 sans couleur ni connexion doit presque toujours toucher un brelan pour gagner. Une paire n’a de valeur que bien accompagnée.', source: 'plTop30' },
+    ],
+  },
+  {
+    group: '2-7 Triple Draw',
+    items: [
+      { title: 'La plus basse gagne', body: 'Au 2-7, l’As est toujours haut et les quintes et couleurs comptent contre toi. La meilleure main est 7-5-4-3-2 de couleurs différentes ; A-2-3-4-5 n’est qu’une main à l’As.', source: 'wiki27' },
+      { title: 'Le 2 et le 7', body: 'Le 2 et le 7 sont les cartes clés : sans 2, impossible de faire la meilleure main. Avant le premier tirage, joue surtout des mains avec un 2 et des cartes de 7 ou moins.', source: 'pn27' },
+      { title: 'Combien de cartes changer', body: 'Tirer 1 carte vers un 7 ou un 8 est excellent, 2 cartes reste jouable, 3 cartes est faible sauf dans les blinds. Garde les cartes basses différentes, jette les paires et les cartes au-dessus de 8.', source: 'tpt27' },
+      { title: 'Rester servi', body: 'Une main faite à 8 ou mieux se garde presque toujours. Une main à 9 se garde aussi en général ; au dernier tirage, une main à 10 contre un joueur qui tire encore est souvent bonne.', source: 'pn27' },
+      { title: 'Lire les tirages adverses', body: 'Le nombre de cartes que change un adversaire en dit long : un joueur servi a une main faite, celui qui tire 2 cartes au dernier tour a peu de chances. Les Stats en tiennent compte.', source: 'pn27' },
     ],
   },
 ];

@@ -1,4 +1,4 @@
-/** Profil des bots à l'Omaha : mains jouées, relances, abattages (npx vite-node scripts/omaha-sanity.ts). */
+/** Profil des bots à l'Omaha ou au 2-7 : mains jouées, relances, abattages (npx vite-node scripts/omaha-sanity.ts 400 [draw27]). */
 import { createRng } from '../src/engine/cards';
 import { applyAction, startHand, stacksAfter, type SeatInput } from '../src/engine/holdem';
 import { BOT_STYLES, styledBot } from '../src/engine/bots';
@@ -12,7 +12,7 @@ let slow = 0;
 for (let n = 0; n < Number(process.argv[2] ?? 400); n++) {
   seats = seats.map((x) => (x.stack < 60 ? { ...x, stack: 200 } : x));
   const start = new Map(seats.map((x) => [x.id, x.stack]));
-  let st = startHand(seats, { variant: 'omaha', structure: 'PL', smallBlind: 1, bigBlind: 2, buttonIndex: n % 6, seed: 900 + n });
+  let st = startHand(seats, { variant: process.argv[3] === 'draw27' ? 'draw27' : 'omaha', structure: process.argv[3] === 'draw27' ? 'FL' : 'PL', smallBlind: 1, bigBlind: 2, buttonIndex: n % 6, seed: 900 + n });
   const did: Record<string, { v: boolean; r: boolean }> = {};
   while (st.toAct !== null) {
     const p = st.players[st.toAct];

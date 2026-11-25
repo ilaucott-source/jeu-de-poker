@@ -6,6 +6,16 @@ import { callPrice, effectiveBB, stageOf } from './tourney';
 import { omahaLabel, omahaTop } from './omaha';
 import { omahaPreflopChart } from './omahaAdvice';
 import { equityFor, madeHandFr, outsFor, variantOf } from './variant';
+import { draw27PreChart, drawsLeft, equity27For, opponents27 } from './draw27';
+import { describe27, drawText, planDraw, top27 } from './lowball';
+
+/** 2-7 : comment nommer une main avant le tirage (« 8-6-5-3-2 servie », « tirage à 1 carte vers 7-5-3-2 »). */
+function label27(hole: Card[]): string {
+  const d = planDraw(hole, 3);
+  if (!d.length) return `${describe27(hole).replace(/^Main à \S+ : /, '')} servie`;
+  const kept = hole.filter((_, i) => !d.includes(i)).map((c) => c[0]).sort((a, b) => '23456789TJQKA'.indexOf(b) - '23456789TJQKA'.indexOf(a)).map((r) => (r === 'T' ? '10' : r));
+  return `tirage à ${d.length} carte${d.length > 1 ? 's' : ''}${kept.length ? ` vers ${kept.join('-')}` : ''}`;
+}
 
 /** De quoi rejouer une main à l'identique : sièges, réglages (avec la graine du paquet) et actions. */
 export interface HandScript {
@@ -40,7 +50,9 @@ export interface Decision {
 export function scriptActions(hand: HandState): PlayerAction[] {
   return hand.log
     .filter((a) => a.type !== 'post')
-    .map((a) => (a.type === 'bet' || a.type === 'raise' ? { type: a.type, to: a.amount } : { type: a.type as 'fold' | 'check' | 'call' }));
+    .map((a): PlayerAction =>
+      a.type === 'bet' || a.type === 'raise' ? { type: a.type, to: a.amount } : a.type === 'draw' ? { type: 'draw', discard: a.discard ?? [] } : { type: a.type as 'fold' | 'check' | 'call' },
+    );
 }
 
 /** Rejoue une main et renvoie l'état avant chaque action (et l'état final en dernier). */
@@ -65,6 +77,8 @@ function playedFr(a: PlayerAction, isBet: boolean): string {
       return 'Parole';
     case 'call':
       return 'Suivi';
+    case 'draw':
+      return a.discard.length ? `Change ${a.discard.length}` : 'Servi';
     default:
       return `${isBet ? 'Mise' : 'Relance'} à ${a.to}`;
   }
@@ -81,20 +95,45 @@ export function analyzeHand(script: HandScript, heroId: string, iterations = 500
     const me = st.players[st.toAct];
     if (me.id !== heroId) return;
     const a = script.actions[k];
-    const legal = legalActions(st)!;
-    const played = playedFr(a, legal.isBet);
-    const kind = kindOf(a);
     const hole = me.holeCards as Card[];
     const variant = variantOf(st);
     const omaha = variant === 'omaha';
-    const name = omaha ? omahaLabel(hole) : startingHandName(hole);
+    const draw27 = variant === 'draw27';
+
+    // 2-7 : le choix des cartes à changer, comparé à la stratégie de base par simulation
+    if (a.type === 'draw') {
+      const left = drawsLeft(st);
+      const rec = planDraw(hole, left);
+      const same = rec.length === a.discard.length && rec.every((i) => a.discard.includes(i));
+      const played = playedFr(a, false);
+      const advice = `Conseil : ${drawText(hole, rec)}.`;
+      if (same) {
+        out.push({ street: st.street, played, grade: 'good', title: `Bon tirage : ${drawText(hole, a.discard)}.`, detail: `${describe27(hole)}. ${advice}` });
+        return;
+      }
+      const it = Math.max(150, iterations);
+      const eMine = equity27For(st, heroId, it, 31 + k, a.discard);
+      const eRec = equity27For(st, heroId, it, 31 + k, rec);
+      const diff = eRec - eMine;
+      const detail = `${describe27(hole)}. Tu as choisi de ${drawText(hole, a.discard)} : environ ${pct(eMine)} de chances de gagner, contre ${pct(eRec)} en suivant le conseil (${drawText(hole, rec)}).`;
+      const tag = a.discard.length === 0 ? 'draw-pat' : a.discard.length > rec.length ? 'draw-too-many' : 'draw-keep-high';
+      if (diff < 0.03) out.push({ street: st.street, played, grade: 'good', title: 'Tirage défendable.', detail, equity: eMine });
+      else if (diff < 0.08) out.push({ street: st.street, played, grade: 'ok', tag, title: 'Un meilleur tirage existait.', detail, equity: eMine });
+      else out.push({ street: st.street, played, grade: 'mistake', tag, title: a.discard.length === 0 ? 'Servi avec une main trop faible.' : 'Mauvais choix de cartes à changer.', detail, equity: eMine });
+      return;
+    }
+
+    const legal = legalActions(st)!;
+    const played = playedFr(a, legal.isBet);
+    const kind = kindOf(a);
+    const name = omaha ? omahaLabel(hole) : draw27 ? label27(hole) : startingHandName(hole);
 
     if (st.street === 'preflop') {
-      const chart = omaha ? omahaPreflopChart(st, st.toAct) : preflopChart(st, st.toAct);
+      const chart = omaha ? omahaPreflopChart(st, st.toAct) : draw27 ? draw27PreChart(st, st.toAct) : preflopChart(st, st.toAct);
       if (!chart) return;
       // face à un tapis (ou quand plus personne ne peut payer une relance), relancer est impossible ou inutile : seul compte payer ou se coucher
       const noRaise = !legal.canBetOrRaise;
-      const adv0 = 'adviseTop' in chart ? chart.adviseTop(omahaTop(hole)) : chart.advise(name);
+      const adv0 = 'adviseTop' in chart ? chart.adviseTop(draw27 ? top27(hole) : omahaTop(hole)) : chart.advise(name);
       const adv: Advice = noRaise && (adv0 === 'raise' || adv0 === 'bluff') ? (adv0 === 'raise' ? 'call' : 'fold') : adv0;
       const pos = POSITION_FR[positionOf(st, st.toAct)];
       const info = stageOf(st);
@@ -124,11 +163,11 @@ export function analyzeHand(script: HandScript, heroId: string, iterations = 500
     const ranges = estimateRanges(st, heroId).map((r) => ({ top: r.top, post: r.post }));
     if (!ranges.length) return;
     const info = stageOf(st);
-    const e = equityFor(variant, hole, st.board, ranges, iterations, 17 + k);
-    const fair = 1 / (ranges.length + 1);
+    const e = draw27 ? equity27For(st, heroId, Math.max(150, iterations), 17 + k) : equityFor(variant, hole, st.board, ranges, iterations, 17 + k);
+    const fair = 1 / ((draw27 ? opponents27(st, heroId).length : ranges.length) + 1);
     const pot = potTotal(st);
-    const draws = st.board.length < 5 ? outsFor(variant, hole, st.board).length : 0;
-    const made = madeHandFr(variant, hole, st.board);
+    const draws = !draw27 && st.board.length < 5 ? outsFor(variant, hole, st.board).length : 0;
+    const made = draw27 ? describe27(hole) : madeHandFr(variant, hole, st.board);
     const base = `Avec ${made.toLowerCase()}, tu avais environ ${pct(e)} de chances de gagner`;
 
     if (legal.callAmount > 0) {
@@ -179,5 +218,6 @@ export function analyzeHand(script: HandScript, heroId: string, iterations = 500
       if (info && !out[i].stage && st.toAct !== null) out[i].stage = `${info.label} · ${Math.round(effectiveBB(st, st.toAct))} BB`;
     }
   });
+  for (const d of out) d.title = d.title.charAt(0).toUpperCase() + d.title.slice(1);
   return out;
 }

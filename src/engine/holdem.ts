@@ -1,10 +1,11 @@
 import { type Card, createRng, fullDeck, shuffle } from './cards';
 import { evaluateBest, evaluateOmaha, type HandValue } from './evaluator';
+import { value27 } from './lowball';
 
 /** NL = No Limit, PL = Pot Limit, FL = Limit (Fixed Limit). */
 export type BettingStructure = 'NL' | 'PL' | 'FL';
 export type Street = 'preflop' | 'flop' | 'turn' | 'river' | 'showdown' | 'complete';
-export type ActionType = 'fold' | 'check' | 'call' | 'bet' | 'raise';
+export type ActionType = 'fold' | 'check' | 'call' | 'bet' | 'raise' | 'draw';
 
 export interface SeatInput {
   id: string;
@@ -41,6 +42,8 @@ export interface Action {
   street: Street;
   allIn?: boolean;
   label?: string;
+  /** 2-7 : positions des cartes jetées */
+  discard?: number[];
 }
 
 export interface Pot {
@@ -56,8 +59,8 @@ export interface PotResult {
   hand?: string;
 }
 
-/** Jeu : Texas Hold'em (2 cartes) ou Omaha (4 cartes, on en utilise exactement 2). */
-export type GameVariant = 'holdem' | 'omaha';
+/** Jeu : Texas Hold'em (2 cartes), Omaha (4 cartes, on en utilise exactement 2) ou 2-7 Triple Draw (5 cartes, trois tirages, la plus basse gagne). */
+export type GameVariant = 'holdem' | 'omaha' | 'draw27';
 
 export interface HandConfig {
   /** absent = Texas Hold'em (anciennes parties) */
@@ -96,6 +99,12 @@ export interface HandState {
   results: PotResult[] | null;
   /** Mains montrées à l'abattage. */
   showdown: Record<string, HandValue> | null;
+  /** 2-7 : joueurs qui doivent encore choisir leurs cartes à changer (dans l'ordre), ou null hors tirage */
+  drawPending?: number[] | null;
+  /** 2-7 : cartes jetées (remélangées si le paquet est vide) */
+  discards?: Card[];
+  /** 2-7 : nombre de fois où les cartes jetées ont été remélangées */
+  reshuffles?: number;
 }
 
 export interface LegalActions {
@@ -206,7 +215,7 @@ export function startHand(seats: SeatInput[], config: HandConfig): HandState {
   state.currentBet = Math.max(config.bigBlind, ...players.map((p) => p.bet));
 
   // Distribution : deux cartes chacun (quatre à l'Omaha), en commençant à gauche du bouton
-  const holeCount = config.variant === 'omaha' ? 4 : 2;
+  const holeCount = config.variant === 'draw27' ? 5 : config.variant === 'omaha' ? 4 : 2;
   for (let round = 0; round < holeCount; round++) {
     let i = sbIndex;
     for (let k = 0; k < live.length; k++) {
@@ -221,7 +230,7 @@ export function startHand(seats: SeatInput[], config: HandConfig): HandState {
 }
 
 export function legalActions(state: HandState): LegalActions | null {
-  if (state.toAct === null) return null;
+  if (state.toAct === null || state.drawPending?.length) return null;
   const p = state.players[state.toAct];
   const callAmount = Math.min(state.currentBet - p.bet, p.stack);
   const canCheck = state.currentBet === p.bet;
@@ -263,10 +272,48 @@ export type PlayerAction =
   | { type: 'fold' }
   | { type: 'check' }
   | { type: 'call' }
-  | { type: 'bet' | 'raise'; to: number };
+  | { type: 'bet' | 'raise'; to: number }
+  /** 2-7 : jeter les cartes à ces positions (liste vide = servi) */
+  | { type: 'draw'; discard: number[] };
+
+/** 2-7 : c'est au tour de ce joueur de changer ses cartes. */
+export const isDrawing = (s: HandState) => !!s.drawPending?.length && s.toAct !== null;
+
+function applyDraw(prev: HandState, discard: number[]): HandState {
+  const state = clone(prev);
+  const idx = state.toAct!;
+  const p = state.players[idx];
+  const set = [...new Set(discard)].filter((i) => i >= 0 && i < p.holeCards.length).sort((a, b) => a - b);
+  state.discards ??= [];
+  const thrown = set.map((i) => p.holeCards[i]);
+  for (const i of set) {
+    if (!state.deck.length) {
+      // paquet vide : on remélange les cartes jetées par les autres (pas celles qu'on vient de jeter)
+      state.reshuffles = (state.reshuffles ?? 0) + 1;
+      state.deck = shuffle(state.discards, createRng((state.config.seed ^ (0x9e3779b9 * state.reshuffles)) >>> 0));
+      state.discards = [];
+    }
+    p.holeCards[i] = state.deck.shift()!;
+  }
+  state.discards.push(...thrown);
+  state.log.push({ playerId: p.id, type: 'draw', amount: set.length, street: state.street, discard: set });
+  state.drawPending = state.drawPending!.slice(1);
+  if (state.drawPending.length) state.toAct = state.drawPending[0];
+  else {
+    state.drawPending = null;
+    const first = nextIndex(state.players, state.config.buttonIndex, canAct);
+    state.toAct = first === -1 ? null : first;
+  }
+  return settle(state);
+}
 
 /** Applique une action du joueur dont c'est le tour. Renvoie un nouvel état (l'ancien n'est pas modifié). */
 export function applyAction(prev: HandState, action: PlayerAction): HandState {
+  if (prev.drawPending?.length) {
+    if (action.type !== 'draw') throw new Error('Il faut choisir les cartes à changer');
+    return applyDraw(prev, action.discard);
+  }
+  if (action.type === 'draw') throw new Error('Pas de tirage en ce moment');
   const legal = legalActions(prev);
   if (!legal || prev.toAct === null) throw new Error("Ce n'est le tour de personne");
   const state = clone(prev);
@@ -339,6 +386,7 @@ function settle(state: HandState): HandState {
   for (;;) {
     const remaining = state.players.filter(inHand);
     if (remaining.length === 1) return finishByFold(state, remaining[0]);
+    if (state.drawPending?.length) return state;
 
     const actors = state.players.filter(canAct);
     // Un seul joueur peut encore agir et il a déjà égalisé : personne d'autre ne peut répondre
@@ -364,6 +412,19 @@ function nextStreet(state: HandState) {
   state.minRaise = state.config.bigBlind;
   state.fullRaiseLevel = 0;
   state.betsThisStreet = 0;
+  if (state.config.variant === 'draw27') {
+    // 2-7 : pas de tableau ; chaque joueur encore en jeu change ses cartes, en commençant à gauche du bouton
+    state.street = state.street === 'preflop' ? 'flop' : state.street === 'flop' ? 'turn' : 'river';
+    const order: number[] = [];
+    const n = state.players.length;
+    for (let k = 1; k <= n; k++) {
+      const i = (state.config.buttonIndex + k) % n;
+      if (inHand(state.players[i])) order.push(i);
+    }
+    state.drawPending = order;
+    state.toAct = order[0] ?? null;
+    return;
+  }
   state.deck.shift(); // carte brûlée
   if (state.street === 'preflop') {
     state.street = 'flop';
@@ -415,14 +476,16 @@ function sameSet(a: string[], b: string[]) {
 }
 
 function showdown(state: HandState): HandState {
-  while (state.board.length < 5) {
+  const draw = state.config.variant === 'draw27';
+  while (!draw && state.board.length < 5) {
     state.deck.shift();
     state.board.push(state.deck.shift()!);
   }
   state.street = 'showdown';
   const values: Record<string, HandValue> = {};
   const omaha = state.config.variant === 'omaha';
-  for (const p of state.players.filter(inHand)) values[p.id] = omaha ? evaluateOmaha(p.holeCards, state.board) : evaluateBest([...p.holeCards, ...state.board]);
+  for (const p of state.players.filter(inHand))
+    values[p.id] = draw ? value27(p.holeCards) : omaha ? evaluateOmaha(p.holeCards, state.board) : evaluateBest([...p.holeCards, ...state.board]);
   state.showdown = values;
 
   const pots = buildPots(state.players);
