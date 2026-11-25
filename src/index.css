@@ -618,3 +618,24 @@ button.act.primary { color: #1b1408; }
   .kpis { grid-template-columns: repeat(2, 1fr); }
   .two-cols { grid-template-columns: 1fr; }
 }
+
+/* ===== Menu en paysage : deux colonnes, tout visible sans défiler ===== */
+@media (orientation: landscape) and (min-height: 521px) {
+  .menu { max-width: 860px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px 22px; align-items: start; padding: 24px 28px; }
+  .brand { grid-column: 1 / -1; }
+  .brand .emblem { width: 44px; height: 44px; font-size: 1.4rem; margin: 0 0 8px; }
+  .brand h1 { font-size: 2.1rem; }
+  .menu > .note, .menu > button.big, .menu > .progress-link { grid-column: 1 / -1; }
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  .menu-screen { padding: 4px 12px; }
+  .menu { gap: 6px 14px; padding: 8px 16px 10px; grid-template-columns: 1fr 1fr; }
+  .brand .sub { display: none; }
+  .brand .emblem { width: 26px; height: 26px; font-size: .85rem; }
+  .brand h1 { font-size: 1.15rem; }
+  .segmented { padding: 2px; }
+  .segmented button { padding: 4px 3px; font-size: .74rem; }
+  select { padding: 4px 30px 4px 10px; font-size: .8rem; }
+  .menu button.big { grid-column: auto; padding: 8px; font-size: .9rem; margin: 0; }
+  .menu > .progress-link { grid-column: auto; padding: 8px; font-size: .72rem; }
+}

@@ -3,6 +3,7 @@ import { BOT_STYLES, pickBots, styleFor, type BotLevel } from '../engine/bots';
 import type { TimerPreset } from './timer';
 import { applyAction, startHand, stacksAfter, type BettingStructure, type HandState, type PlayerAction, type SeatInput } from '../engine/holdem';
 import { styledBot } from '../engine/bots';
+import { thinkTime, type BotPace } from '../engine/thinking';
 import { analyzeHand, type HandScript } from '../engine/analysis';
 import { recordFromHand, saveHand, saveTourney, updateHand } from './history';
 import { LEVEL_FR } from '../engine/bots';
@@ -26,6 +27,8 @@ export interface CashGameOptions {
   bots: number;
   level: BotLevel | 'mix';
   speed: TourneySpeed;
+  /** rythme de jeu des adversaires */
+  pace?: BotPace;
   timer: TimerPreset;
 }
 
@@ -102,7 +105,11 @@ export function useCashGame(opts: CashGameOptions) {
     const p = hand.players[hand.toAct];
     if (p.id === HERO_ID) return;
     const style = styleFor(p.name) ?? BOT_STYLES[0];
-    const t = setTimeout(() => setHand((h) => (h && h.toAct !== null && h.players[h.toAct].id === p.id ? applyAction(h, styledBot(h, style)) : h)), (total > 6 ? 450 : 650) + Math.random() * (total > 6 ? 450 : 650));
+    // le bot décide tout de suite, puis « réfléchit » un temps qui dépend de la difficulté du coup
+    const action = styledBot(hand, style);
+    const delay = thinkTime(hand, style, action, opts.pace ?? 'normal');
+    const logLen = hand.log.length;
+    const t = setTimeout(() => setHand((h) => (h && h.toAct !== null && h.players[h.toAct].id === p.id && h.log.length === logLen ? applyAction(h, action) : h)), delay);
     return () => clearTimeout(t);
   }, [hand]);
 

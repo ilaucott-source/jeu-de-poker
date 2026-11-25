@@ -5,6 +5,7 @@ import { LEVEL_FR, pickBots, type BotLevel } from './engine/bots';
 import { SPEED, type TourneySpeed } from './game/tournament';
 import { Table } from './ui/Table';
 import { Progress } from './ui/Progress';
+import { PACE, type BotPace } from './engine/thinking';
 import { TIMER_PRESETS, type TimerPreset } from './game/timer';
 
 function Segmented<T extends string | number>({ value, options, onChange, label }: { value: T; options: { v: T; label: string }[]; onChange: (v: T) => void; label: string }) {
@@ -21,7 +22,7 @@ function Segmented<T extends string | number>({ value, options, onChange, label 
 
 export default function App() {
   const [opts, setOptsRaw] = useState<CashGameOptions>(() => {
-    const base: CashGameOptions = { mode: 'cash', structure: 'NL', bigBlind: 2, buyInBB: 100, bots: 5, level: 'moyen', speed: 'normal', timer: 'relaxed' };
+    const base: CashGameOptions = { mode: 'cash', structure: 'NL', bigBlind: 2, buyInBB: 100, bots: 5, level: 'moyen', speed: 'normal', pace: 'normal', timer: 'relaxed' };
     try {
       return { ...base, ...JSON.parse(localStorage.getItem('poker-menu') ?? '{}') };
     } catch {
@@ -112,6 +113,16 @@ export default function App() {
             <p className="note">Chacun commence avec 1 500 jetons. {SPEED[opts.speed].hint} Le dernier joueur en lice gagne.</p>
           </div>
         )}
+        <div className="field">
+          <span>Rythme des adversaires</span>
+          <Segmented<BotPace>
+            label="Rythme des adversaires"
+            value={opts.pace ?? 'normal'}
+            onChange={(v) => setOpts({ ...opts, pace: v })}
+            options={(['rapide', 'normal', 'realiste'] as const).map((v) => ({ v, label: PACE[v].label }))}
+          />
+          <p className="note">{PACE[opts.pace ?? 'normal'].hint}</p>
+        </div>
         <div className="field">
           <label htmlFor="timer">Temps pour jouer</label>
           <select id="timer" value={opts.timer} onChange={(e) => setOpts({ ...opts, timer: e.target.value as TimerPreset })}>
