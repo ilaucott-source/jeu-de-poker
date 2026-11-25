@@ -9,6 +9,7 @@ import { updateHand, type HandRecord } from '../game/history';
 import { CardView } from './CardView';
 
 const STREET_FR: Record<string, string> = { preflop: 'Avant le flop', flop: 'Flop', turn: 'Turn', river: 'River' };
+const STREET_27: Record<string, string> = { preflop: 'Avant le 1er tirage', flop: '1er tirage', turn: '2e tirage', river: '3e tirage' };
 const GRADE_FR = { good: 'Bonne décision', ok: 'À améliorer', mistake: 'Erreur' };
 const fmtBB = (x: number) => `${x > 0 ? '+' : ''}${Math.round(x * 10) / 10} BB`;
 
@@ -16,6 +17,7 @@ const fmtBB = (x: number) => `${x > 0 ? '+' : ''}${Math.round(x * 10) / 10} BB`;
 export function HandReview({ record, onClose }: { record: HandRecord; onClose: () => void }) {
   const data = useMemo(() => {
     const states = replay(record.script);
+    const draw27 = record.game === 'draw27';
     const fresh = record.decisions && record.analysisV === ANALYSIS_VERSION;
     const decisions: Decision[] = fresh ? record.decisions! : analyzeHand(record.script, record.heroId, 400);
     if (!fresh) {
@@ -34,12 +36,24 @@ export function HandReview({ record, onClose }: { record: HandRecord; onClose: (
       const p = st.players[st.toAct];
       let block = streets[streets.length - 1];
       if (!block || block.street !== st.street) {
-        block = { street: st.street, board: st.board, lines: [] };
+        block = { street: st.street, board: draw27 ? [] : st.board, lines: [] };
         streets.push(block);
       }
       const text =
-        a.type === 'fold' ? 'se couche' : a.type === 'check' ? 'parole' : a.type === 'call' ? `suit ${Math.min(st.currentBet - p.bet, p.stack)}` : `${st.currentBet === 0 ? 'mise' : 'relance à'} ${a.to}`;
+        a.type === 'fold'
+          ? 'se couche'
+          : a.type === 'check'
+            ? 'parole'
+            : a.type === 'call'
+              ? `suit ${Math.min(st.currentBet - p.bet, p.stack)}`
+              : a.type === 'draw'
+                ? a.discard.length
+                  ? `change ${a.discard.length} carte${a.discard.length > 1 ? 's' : ''}`
+                  : 'garde ses cartes (servi)'
+                : `${st.currentBet === 0 ? 'mise' : 'relance à'} ${a.to}`;
       block.lines.push({ who: p.id === record.heroId ? 'Toi' : p.name, hero: p.id === record.heroId, text, d: byAt.get(k) });
+      // 2-7 : après son tirage, on montre la nouvelle main du joueur
+      if (draw27 && a.type === 'draw' && p.id === record.heroId) block.board = states[k + 1].players.find((x) => x.id === record.heroId)!.holeCards;
     });
     const shown = final.players.filter((p) => record.shown.includes(p.id) && p.id !== record.heroId);
     const winners = (final.results ?? []).flatMap((r) => Object.entries(r.shares).map(([id, amt]) => ({ name: id === record.heroId ? 'Toi' : final.players.find((p) => p.id === id)!.name, amt })));
@@ -76,7 +90,7 @@ export function HandReview({ record, onClose }: { record: HandRecord; onClose: (
           {data.streets.map((b) => (
             <section key={b.street} className="review-street">
               <h4>
-                {STREET_FR[b.street] ?? b.street}
+                {(record.game === 'draw27' ? STREET_27 : STREET_FR)[b.street] ?? b.street}
                 {b.board.length > 0 && (
                   <span className="review-board">
                     {b.board.map((c) => <CardView key={c} card={c as never} size="sm" />)}

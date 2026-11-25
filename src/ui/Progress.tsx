@@ -142,7 +142,7 @@ export function Progress({ onClose }: { onClose: () => void }) {
                       <span className="hl-main">
                         <span><b>{handNameFor(h.heroCards)}</b> · {POS_SHORT[h.heroPos.replace('*', '')] ?? h.heroPos}</span>
                         <small>
-                          {new Date(h.ts).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · {h.game === 'omaha' ? 'Omaha · ' : ''}{h.mode === 'cash' ? 'Cash' : 'Tournoi'}
+                          {new Date(h.ts).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · {h.game === 'omaha' ? 'Omaha · ' : h.game === 'draw27' ? '2-7 · ' : ''}{h.mode === 'cash' ? 'Cash' : 'Tournoi'}
                         </small>
                       </span>
                       <span className="hl-grades">

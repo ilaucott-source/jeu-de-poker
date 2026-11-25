@@ -3,6 +3,8 @@ import type { Card } from './cards';
 import { equity } from './odds';
 import { equityVsRanges, type RangeSpec } from './ranges';
 import { omahaEquityVsRanges } from './omaha';
+import { equity27For } from './draw27';
+import type { HandState } from './holdem';
 
 export interface EquityJob {
   id: number;
@@ -10,6 +12,8 @@ export interface EquityJob {
   board: Card[];
   ranges: RangeSpec[];
   omaha?: boolean;
+  /** 2-7 : on simule à partir de l'état de la main (tirages adverses compris) */
+  draw27?: { state: HandState; heroId: string };
 }
 export interface EquityResult {
   id: number;
@@ -18,7 +22,12 @@ export interface EquityResult {
 }
 
 self.onmessage = (e: MessageEvent<EquityJob>) => {
-  const { id, hole, board, ranges, omaha } = e.data;
+  const { id, hole, board, ranges, omaha, draw27 } = e.data;
+  if (draw27) {
+    const v = equity27For(draw27.state, draw27.heroId, 1200, 13);
+    (self as unknown as Worker).postMessage({ id, random: v, vsRange: v } satisfies EquityResult);
+    return;
+  }
   const anyHand = ranges.every((r) => (typeof r === 'number' ? r : r.top) >= 1 && (typeof r === 'number' || !r.post));
   let random: number;
   let vsRange: number;

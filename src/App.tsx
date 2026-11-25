@@ -94,16 +94,25 @@ export default function App() {
             <Segmented<GameVariant>
               label="Jeu"
               value={opts.variant ?? 'holdem'}
-              // l'Omaha se joue presque toujours en Pot Limit
-              onChange={(v) => setOpts({ ...opts, variant: v, structure: v === 'omaha' && opts.structure === 'NL' ? 'PL' : v === 'holdem' && opts.structure === 'PL' ? 'NL' : opts.structure })}
+              // l'Omaha se joue presque toujours en Pot Limit, le 2-7 Triple Draw en Limit, à 6 au plus
+              onChange={(v) =>
+                setOpts({
+                  ...opts,
+                  variant: v,
+                  structure: v === 'draw27' ? 'FL' : v === 'omaha' && opts.structure !== 'FL' ? 'PL' : v === 'holdem' && opts.variant !== 'holdem' ? 'NL' : opts.structure,
+                  bots: v === 'draw27' ? Math.min(5, opts.bots) : opts.bots,
+                })
+              }
               options={[
-                { v: 'holdem', label: "Texas Hold'em" },
+                { v: 'holdem', label: "Hold'em" },
                 { v: 'omaha', label: 'Omaha' },
+                { v: 'draw27', label: '2-7 Triple Draw' },
               ]}
             />
           </div>
         </div>
         {opts.variant === 'omaha' && <p className="note game-note">Omaha : 4 cartes chacun ; ta main utilise exactement 2 de tes cartes et 3 du tableau.</p>}
+        {opts.variant === 'draw27' && <p className="note game-note">2-7 Triple Draw : 5 cartes chacun, trois occasions de les changer, et la main la plus basse gagne (l’As est haut, quintes et couleurs comptent contre toi).</p>}
         <div className="field">
           <span>Mode</span>
           <Segmented<GameMode>
@@ -122,16 +131,20 @@ export default function App() {
             label="Variante"
             value={opts.structure}
             onChange={(v) => setOpts({ ...opts, structure: v })}
-            options={[
-              { v: 'NL', label: 'No Limit' },
-              { v: 'PL', label: 'Pot Limit' },
-              { v: 'FL', label: 'Limit' },
-            ]}
+            options={
+              opts.variant === 'draw27'
+                ? [{ v: 'FL', label: 'Limit (la règle du Triple Draw)' }]
+                : [
+                    { v: 'NL', label: 'No Limit' },
+                    { v: 'PL', label: 'Pot Limit' },
+                    { v: 'FL', label: 'Limit' },
+                  ]
+            }
           />
         </div>
         <div className="field">
           <span>Adversaires ({opts.bots + 1} joueurs à la table)</span>
-          <Segmented<number> label="Adversaires" value={opts.bots} onChange={(v) => setOpts({ ...opts, bots: v })} options={[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({ v: n, label: String(n) }))} />
+          <Segmented<number> label="Adversaires" value={opts.bots} onChange={(v) => setOpts({ ...opts, bots: v })} options={(opts.variant === 'draw27' ? [1, 2, 3, 4, 5] : [1, 2, 3, 4, 5, 6, 7, 8, 9]).map((n) => ({ v: n, label: String(n) }))} />
         </div>
         <div className="field">
           <span>Niveau des adversaires</span>

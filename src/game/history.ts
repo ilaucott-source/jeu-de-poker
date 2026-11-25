@@ -173,7 +173,8 @@ export function recordFromHand(final: HandState, script: Omit<HandScript, 'actio
       pfr: mine.some((a) => a.street === 'preflop' && a.type === 'raise'),
       threeBetChance,
       threeBet,
-      sawFlop: final.board.length >= 3 && !mine.some((a) => a.street === 'preflop' && a.type === 'fold'),
+      // a vu le flop (ou, au 2-7, le premier tirage)
+      sawFlop: (final.board.length >= 3 || final.log.some((a) => a.type === 'draw')) && !mine.some((a) => a.street === 'preflop' && a.type === 'fold'),
       showdown,
       wonShowdown: showdown && won,
       aggr: post.filter((a) => a.type === 'bet' || a.type === 'raise').length,

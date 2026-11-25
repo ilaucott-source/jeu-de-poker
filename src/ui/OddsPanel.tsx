@@ -21,6 +21,7 @@ import { stageTip } from '../engine/tips';
 import { CardView } from './CardView';
 import { useEquity } from './useEquity';
 import { isCompactLandscape } from './layout';
+import { Draw27Stats } from './Draw27Stats';
 
 const pct = (x: number) => `${Math.round(x * 100)} %`;
 const topLabel = (x: number) => (x < 0.01 ? 'top 1 %' : `top ${Math.round(x * 100)} %`);
@@ -33,7 +34,11 @@ interface Props {
   onClose: () => void;
 }
 
-export function OddsPanel({ hand, heroId, raiseTo, onClose }: Props) {
+export function OddsPanel(props: Props) {
+  return props.hand.config.variant === 'draw27' ? <Draw27Stats {...props} /> : <HoldemOddsPanel {...props} />;
+}
+
+function HoldemOddsPanel({ hand, heroId, raiseTo, onClose }: Props) {
   const heroIndex = hand.players.findIndex((p) => p.id === heroId);
   const hero = hand.players[heroIndex];
   const hole = hero.holeCards;
@@ -246,7 +251,7 @@ export function OddsPanel({ hand, heroId, raiseTo, onClose }: Props) {
 }
 
 /** Échelle des mains d'Omaha, de la meilleure (à gauche) à la pire, colorée selon le conseil, avec ta main repérée. */
-function TopScale({ chart, t }: { chart: OmahaChart; t: number }) {
+export function TopScale({ chart, t }: { chart: OmahaChart; t: number }) {
   const segs: { a: string; from: number; to: number }[] = [];
   for (let k = 0; k < 100; k++) {
     const a = chart.adviseTop((k + 0.5) / 100);
@@ -263,7 +268,7 @@ function TopScale({ chart, t }: { chart: OmahaChart; t: number }) {
   );
 }
 
-function Meter({ label, value, fair, strong }: { label: string; value: number | undefined; fair: number; strong?: boolean }) {
+export function Meter({ label, value, fair, strong }: { label: string; value: number | undefined; fair: number; strong?: boolean }) {
   return (
     <div className={`meter ${strong ? 'strong' : ''}`}>
       <div className="meter-head">

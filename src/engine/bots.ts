@@ -7,6 +7,8 @@ import { callPrice, pushRange } from './tourney';
 import { omahaTop } from './omaha';
 import { omahaPreflopChart } from './omahaAdvice';
 import { classFor, equityFor, outsFor, variantOf } from './variant';
+import { draw27PreChart, drawsLeft, equity27For, opponents27 } from './draw27';
+import { planDraw, top27 } from './lowball';
 
 export type BotLevel = 'facile' | 'moyen' | 'difficile' | 'expert';
 
@@ -100,7 +102,21 @@ function passive(state: HandState, wantCall: boolean): PlayerAction {
  * ICM ignoré en partie, top paire surestimée) mais plus d'absurdités.
  */
 export function styledBot(state: HandState, style: BotStyle, rng: () => number = Math.random): PlayerAction {
-  if (state.street === 'preflop') return state.config.variant === 'omaha' ? omahaPreflop(state, style, rng) : preflop(state, style, rng);
+  if (state.config.variant === 'draw27') {
+    if (state.drawPending?.length) return botDraw(state, style, rng);
+    if (state.street === 'preflop') {
+      const me = state.players[state.toAct!];
+      return chartPreflop(state, style, rng, draw27PreChart(state, state.toAct!), top27(me.holeCards));
+    }
+    return draw27Bet(state, style, rng);
+  }
+  if (state.street === 'preflop') {
+    if (state.config.variant === 'omaha') {
+      const me = state.players[state.toAct!];
+      return chartPreflop(state, style, rng, omahaPreflopChart(state, state.toAct!), omahaTop(me.holeCards));
+    }
+    return preflop(state, style, rng);
+  }
   return postflop(state, style, rng);
 }
 
@@ -111,15 +127,16 @@ function potRaise(state: HandState, frac = 1): PlayerAction {
   return raiseOrShove(state, state.currentBet + pot * frac);
 }
 
-/** Omaha avant le flop : même raisonnement qu'au Hold'em (position, ranges, cote, ICM), avec les mains à 4 cartes. */
-function omahaPreflop(state: HandState, s: BotStyle, rng: () => number): PlayerAction {
+/**
+ * Omaha et 2-7 avant le premier tour : même raisonnement qu'au Hold'em (position, ranges, cote, ICM),
+ * à partir d'un conseil qui situe la main en « top X % ».
+ */
+function chartPreflop(state: HandState, s: BotStyle, rng: () => number, chart: { adviseTop: (t: number) => string } | null, top: number): PlayerAction {
   const legal = legalActions(state)!;
-  const idx = state.toAct!;
-  const me = state.players[idx];
-  const chart = omahaPreflopChart(state, idx);
+  const me = state.players[state.toAct!];
   if (!chart) return passive(state, false);
   // les moins doués situent mal leur main, et les joueurs larges se croient plus forts qu'ils ne sont
-  const raw = clamp01(omahaTop(me.holeCards) + (rng() - 0.5) * (1 - s.skill) * 0.2);
+  const raw = clamp01(top + (rng() - 0.5) * (1 - s.skill) * 0.2);
   const loose = Math.pow(s.looseness, 0.8);
   const t = raw / loose;
   const adv = chart.adviseTop(t);
@@ -308,5 +325,45 @@ function postflop(state: HandState, s: BotStyle, rng: () => number): PlayerActio
   }
   if (e + implied >= need - leak) return { type: 'call' };
   if (legal.canBetOrRaise && !lateStreet && opps === 1 && (drawy || cls === 1) && !big && rng() < s.bluff * 0.25) return raiseOrShove(state, state.currentBet * 2.8);
+  return { type: 'fold' };
+}
+
+/* ------------------------------ 2-7 Triple Draw ------------------------------ */
+
+/** Cartes à changer : la stratégie de base, que les joueurs faibles appliquent mal (ils gardent des cartes trop hautes). */
+function botDraw(state: HandState, s: BotStyle, rng: () => number): PlayerAction {
+  const me = state.players[state.toAct!];
+  const left = drawsLeft(state);
+  const loose = s.skill < 0.5 && rng() < 0.5 - s.skill ? 1 : 0;
+  let discard = planDraw(me.holeCards, left, loose);
+  // bluff « servi » : au dernier tirage, face à un seul adversaire qui tire encore, les bluffeurs gardent parfois tout
+  const opps = opponents27(state, me.id);
+  if (left === 1 && discard.length >= 2 && opps.length === 1 && rng() < s.bluff * 0.25 * s.skill) discard = [];
+  return { type: 'draw', discard };
+}
+
+/** Mises après un tirage (Limit) : équité contre les mains compatibles avec les tirages adverses, comparée au prix. */
+function draw27Bet(state: HandState, s: BotStyle, rng: () => number): PlayerAction {
+  const legal = legalActions(state)!;
+  const me = state.players[state.toAct!];
+  const pot = potTotal(state);
+  const opps = opponents27(state, me.id);
+  const fair = 1 / (opps.length + 1);
+  let e = equity27For(state, me.id, Math.round(80 + s.skill * 160), Math.floor(rng() * 1e9));
+  e = clamp01(e + (rng() - 0.5) * (1 - s.skill) * 0.12);
+  const left = drawsLeft(state);
+  const pat = state.log.filter((a) => a.playerId === me.id && a.type === 'draw').slice(-1)[0]?.amount === 0;
+  if (legal.canCheck) {
+    if (!legal.canBetOrRaise) return { type: 'check' };
+    if (e > Math.max(0.5, fair + 0.15) && rng() < 0.45 + s.aggression * 0.5) return raiseAction(state, legal.minTo);
+    // pression d'un joueur servi, ou bluff contre un seul adversaire qui tire encore
+    if (opps.length === 1 && (pat || left > 0) && rng() < s.bluff * (pat ? 0.8 : 0.4)) return raiseAction(state, legal.minTo);
+    return { type: 'check' };
+  }
+  const toCall = legal.callAmount;
+  const need = toCall / (pot + toCall);
+  const leak = s.calling * 0.08;
+  if (legal.canBetOrRaise && e > Math.max(0.62, need + 0.25) && rng() < s.aggression * 0.75) return raiseAction(state, legal.minTo);
+  if (e >= need - leak) return { type: 'call' };
   return { type: 'fold' };
 }

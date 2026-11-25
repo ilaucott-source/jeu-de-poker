@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Card } from '../engine/cards';
 import type { EquityJob, EquityResult } from '../engine/equity.worker';
 import type { RangeSpec } from '../engine/ranges';
+import type { HandState } from '../engine/holdem';
 
 let worker: Worker | null = null;
 let nextId = 1;
@@ -34,4 +35,27 @@ export function useEquity(hole: Card[], board: Card[], ranges: RangeSpec[], omah
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   return res && res.key === key ? res : null;
+}
+
+/** 2-7 : équité contre les mains compatibles avec les tirages des adversaires, calculée en arrière-plan. */
+export function useEquity27(state: HandState | null, heroId: string, key: string) {
+  const [res, setRes] = useState<{ key: string; v: number } | null>(null);
+  const want = useRef(key);
+  useEffect(() => {
+    want.current = key;
+    if (!state) return;
+    const w = getWorker();
+    if (!w) return;
+    const id = nextId++;
+    const onMsg = (e: MessageEvent<EquityResult>) => {
+      if (e.data.id !== id) return;
+      w.removeEventListener('message', onMsg);
+      if (want.current === key) setRes({ key, v: e.data.vsRange });
+    };
+    w.addEventListener('message', onMsg);
+    w.postMessage({ id, hole: [], board: [], ranges: [], draw27: { state, heroId } } satisfies EquityJob);
+    return () => w.removeEventListener('message', onMsg);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return res && res.key === key ? res.v : undefined;
 }
