@@ -9,6 +9,7 @@ import { OddsPanel } from './OddsPanel';
 import { ChipStack, FlyingChips, type Flight } from './chips';
 import { ordinalFR } from '../game/tournament';
 import { TourneyEnd } from './TourneyEnd';
+import type { SavedGame } from '../game/save';
 import { HandReview } from './HandReview';
 import { loadHands, type HandRecord } from '../game/history';
 import { betPos, isCompactLandscape, seatPos } from './layout';
@@ -17,8 +18,8 @@ import { isMuted, playBoard, playCheck, playChips, playDeal, playFold, playWin, 
 const STRUCTURE_FR = { NL: 'No Limit', PL: 'Pot Limit', FL: 'Limit' };
 const ACTION_FR: Record<string, string> = { fold: 'Couché', check: 'Parole', call: 'Suit', bet: 'Mise', raise: 'Relance', post: 'Blind' };
 
-export function Table({ options, onQuit, onReplay }: { options: CashGameOptions; onQuit: () => void; onReplay: () => void }) {
-  const game = useCashGame(options);
+export function Table({ options, onQuit, onReplay, resume }: { options: CashGameOptions; onQuit: () => void; onReplay: () => void; resume?: SavedGame | null }) {
+  const game = useCashGame(options, resume);
   const { hand, handNo, deal, act, rebuy, heroStack } = game;
   const tourney = options.mode === 'tournament';
   const [toast, setToast] = useState<string | null>(null);

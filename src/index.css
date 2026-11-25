@@ -639,3 +639,26 @@ button.act.primary { color: #1b1408; }
   .menu button.big { grid-column: auto; padding: 8px; font-size: .9rem; margin: 0; }
   .menu > .progress-link { grid-column: auto; padding: 8px; font-size: .72rem; }
 }
+
+/* ===== Reprise de partie ===== */
+.resume-card { display: flex; align-items: center; gap: 12px; justify-content: space-between; padding: 10px 12px 10px 16px; border-radius: 14px; border: 1px solid var(--gold); background: linear-gradient(180deg, #1d2b20cc, #0a110dcc); }
+.resume-card b { color: var(--gold-hi); font-family: var(--display); font-weight: 400; font-size: 1.05rem; letter-spacing: .04em; }
+.resume-card small { display: block; color: var(--muted); font-size: .74rem; line-height: 1.35; }
+.resume-card button { padding: 10px 18px; flex: none; }
+@media (orientation: landscape) and (min-height: 521px) { .resume-card { grid-column: 1 / -1; } }
+@media (orientation: landscape) and (max-height: 520px) {
+  .resume-card { grid-column: 1 / -1; padding: 4px 6px 4px 12px; }
+  .resume-card small br { display: none; }
+  .resume-card small { font-size: .62rem; }
+  .resume-card b { font-size: .85rem; }
+  .resume-card button { padding: 6px 14px; font-size: .85rem; }
+}
+@media (orientation: landscape) and (min-height: 521px) {
+  .menu.has-save > button.big, .menu.has-save > .progress-link { grid-column: auto; margin: 0; }
+  .menu.has-save { gap: 10px 22px; padding-top: 16px; }
+  .menu.has-save .brand .emblem { display: none; }
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  .menu.has-save .brand { display: none; }
+  .menu.has-save { padding-top: 4px; padding-bottom: 4px; gap: 5px 14px; }
+}

@@ -3,6 +3,7 @@ import { BOT_STYLES, pickBots, styleFor, type BotLevel } from '../engine/bots';
 import type { TimerPreset } from './timer';
 import { applyAction, startHand, stacksAfter, type BettingStructure, type HandState, type PlayerAction, type SeatInput } from '../engine/holdem';
 import { styledBot } from '../engine/bots';
+import { clearGame, saveGame, type SavedGame } from './save';
 import { thinkTime, type BotPace } from '../engine/thinking';
 import { analyzeHand, type HandScript } from '../engine/analysis';
 import { recordFromHand, saveHand, saveTourney, updateHand } from './history';
@@ -38,22 +39,26 @@ export interface Elimination {
   place: number;
 }
 
-export function useCashGame(opts: CashGameOptions) {
+export function useCashGame(opts: CashGameOptions, resume?: SavedGame | null) {
   const tourney = opts.mode === 'tournament';
-  const [hand, setHand] = useState<HandState | null>(null);
-  const [handNo, setHandNo] = useState(0);
-  const handNoRef = useRef(0);
-  const scriptRef = useRef<Omit<HandScript, 'actions'> | null>(null);
-  const savedRef = useRef(0);
+  const [hand, setHand] = useState<HandState | null>(resume?.hand ?? null);
+  const [handNo, setHandNo] = useState(resume?.handNo ?? 0);
+  const handNoRef = useRef(resume?.handNo ?? 0);
+  const scriptRef = useRef<Omit<HandScript, 'actions'> | null>(resume?.script ?? null);
+  const savedRef = useRef(resume?.hand?.street === 'complete' ? resume.handNo : 0);
   const [lastRecordId, setLastRecordId] = useState<string | null>(null);
-  const [eliminated, setEliminated] = useState<Elimination[]>([]);
+  const [eliminated, setEliminated] = useState<Elimination[]>(resume?.eliminated ?? []);
   const startStack = tourney ? TOURNEY_STACK : opts.buyInBB * opts.bigBlind;
-  const botsRef = useRef(pickBots(opts.level, opts.bots));
-  const seatsRef = useRef<SeatInput[]>([
-    { id: HERO_ID, name: 'Toi', stack: startStack },
-    ...botsRef.current.map((b, i) => ({ id: `bot${i}`, name: b.name, stack: startStack })),
-  ]);
-  const buttonRef = useRef(Math.floor(Math.random() * (opts.bots + 1)));
+  const botsRef = useRef(
+    resume ? resume.seats.filter((x) => x.id !== HERO_ID).map((x) => styleFor(x.name) ?? BOT_STYLES[0]) : pickBots(opts.level, opts.bots),
+  );
+  const seatsRef = useRef<SeatInput[]>(
+    resume?.seats ?? [
+      { id: HERO_ID, name: 'Toi', stack: startStack },
+      ...botsRef.current.map((b, i) => ({ id: `bot${i}`, name: b.name, stack: startStack })),
+    ],
+  );
+  const buttonRef = useRef(resume?.button ?? Math.floor(Math.random() * (opts.bots + 1)));
   const total = opts.bots + 1;
 
   const nextLevel = tourney ? levelFor(handNo + 1, opts.speed) : 0;
@@ -144,6 +149,18 @@ export function useCashGame(opts: CashGameOptions) {
       return [...prev, ...sorted.map((p, k) => ({ id: p.id, name: p.name, place: remaining - k }))];
     });
   }, [hand, tourney, total]);
+
+  // sauvegarde continue de la partie, pour la reprendre plus tard ou ailleurs
+  useEffect(() => {
+    if (!hand) return;
+    const t = setTimeout(() => {
+      const over = tourney && (total - eliminated.length <= 1 || eliminated.some((e) => e.id === HERO_ID));
+      if (over) clearGame();
+      else
+        saveGame({ v: 1, ts: Date.now(), opts, seats: seatsRef.current, button: buttonRef.current, handNo: handNoRef.current, eliminated, hand, script: scriptRef.current });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [hand, eliminated, opts, tourney, total]);
 
   const heroStack = seatsRef.current.find((s) => s.id === HERO_ID)!.stack;
   const alive = total - eliminated.length;

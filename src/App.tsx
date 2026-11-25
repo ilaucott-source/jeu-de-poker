@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { BettingStructure } from './engine/holdem';
 import type { CashGameOptions, GameMode } from './game/useCashGame';
 import { LEVEL_FR, pickBots, type BotLevel } from './engine/bots';
 import { SPEED, type TourneySpeed } from './game/tournament';
 import { Table } from './ui/Table';
 import { Progress } from './ui/Progress';
+import { clearGame, loadGame, onSaveChange, type SavedGame } from './game/save';
 import { PACE, type BotPace } from './engine/thinking';
 import { TIMER_PRESETS, type TimerPreset } from './game/timer';
 
@@ -40,14 +41,33 @@ export default function App() {
   const [game, setGame] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(false);
+  const [saved, setSaved] = useState<SavedGame | null>(() => loadGame());
+  const [resumeGame, setResumeGame] = useState<SavedGame | null>(null);
+  useEffect(() => {
+    const off = onSaveChange((g) => {
+      if (!playing) setSaved(g && !g.over ? g : null);
+    });
+    return () => {
+      off();
+    };
+  }, [playing]);
 
   if (playing)
     return (
       <Table
         key={game}
-        options={opts}
-        onQuit={() => setPlaying(false)}
-        onReplay={() => setGame((g) => g + 1)}
+        options={resumeGame?.opts ?? opts}
+        resume={resumeGame}
+        onQuit={() => {
+          setPlaying(false);
+          setResumeGame(null);
+          setSaved(loadGame());
+        }}
+        onReplay={() => {
+          clearGame();
+          setResumeGame(null);
+          setGame((g) => g + 1);
+        }}
       />
     );
   if (progress) return <Progress onClose={() => setProgress(false)} />;
@@ -56,7 +76,7 @@ export default function App() {
 
   return (
     <div className={`menu-screen ${tourney ? 'tourney' : ''}`}>
-      <div className="menu">
+      <div className={`menu ${saved ? 'has-save' : ''}`}>
         <div className="brand">
           <span className="emblem" aria-hidden="true"><span>♠</span></span>
           <h1>Jeu de Poker</h1>
@@ -130,7 +150,40 @@ export default function App() {
           </select>
         </div>
         <p className="note">{TIMER_PRESETS[opts.timer].hint} Ensuite une banque de temps prend le relais.</p>
-        <button className="primary big" onClick={() => setPlaying(true)}>Jouer</button>
+        {saved && (
+          <div className="resume-card">
+            <div>
+              <b>Partie en cours</b>
+              <small>
+                {saved.opts.mode === 'tournament' ? 'Tournoi' : 'Cash game'} · {saved.seats.length} joueurs · main n°{saved.handNo} · tes jetons :{' '}
+                {saved.seats.find((x) => x.id === 'hero')?.stack ?? 0} ·{' '}
+                {new Date(saved.ts).toLocaleString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+              </small>
+            </div>
+            <button
+              className="primary"
+              onClick={() => {
+                setResumeGame(saved);
+                setGame((g) => g + 1);
+                setPlaying(true);
+              }}
+            >
+              Reprendre
+            </button>
+          </div>
+        )}
+        <button
+          className="primary big"
+          onClick={() => {
+            clearGame();
+            setSaved(null);
+            setResumeGame(null);
+            setGame((g) => g + 1);
+            setPlaying(true);
+          }}
+        >
+          {saved ? 'Nouvelle partie' : 'Jouer'}
+        </button>
         <button className="progress-link" onClick={() => setProgress(true)}>Ma progression · statistiques et analyse des mains</button>
       </div>
     </div>
