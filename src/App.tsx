@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { BettingStructure } from './engine/holdem';
+import type { BettingStructure, GameVariant } from './engine/holdem';
+import { VARIANT_FR } from './engine/variant';
 import type { CashGameOptions, GameMode } from './game/useCashGame';
 import { LEVEL_FR, pickBots, type BotLevel } from './engine/bots';
 import { SPEED, type TourneySpeed } from './game/tournament';
@@ -88,8 +89,21 @@ export default function App() {
         <div className="brand">
           <span className="emblem" aria-hidden="true"><span>♠</span></span>
           <h1>Jeu de Poker</h1>
-          <p className="sub">Texas Hold'em</p>
+          <p className="sub">{VARIANT_FR[opts.variant ?? 'holdem']}</p>
+          <div className="game-switch">
+            <Segmented<GameVariant>
+              label="Jeu"
+              value={opts.variant ?? 'holdem'}
+              // l'Omaha se joue presque toujours en Pot Limit
+              onChange={(v) => setOpts({ ...opts, variant: v, structure: v === 'omaha' && opts.structure === 'NL' ? 'PL' : v === 'holdem' && opts.structure === 'PL' ? 'NL' : opts.structure })}
+              options={[
+                { v: 'holdem', label: "Texas Hold'em" },
+                { v: 'omaha', label: 'Omaha' },
+              ]}
+            />
+          </div>
         </div>
+        {opts.variant === 'omaha' && <p className="note game-note">Omaha : 4 cartes chacun ; ta main utilise exactement 2 de tes cartes et 3 du tableau.</p>}
         <div className="field">
           <span>Mode</span>
           <Segmented<GameMode>
@@ -163,7 +177,7 @@ export default function App() {
             <div>
               <b>Partie en cours</b>
               <small>
-                {saved.opts.mode === 'tournament' ? 'Tournoi' : 'Cash game'} · {saved.seats.length} joueurs · main n°{saved.handNo} · tes jetons :{' '}
+                {VARIANT_FR[saved.opts.variant ?? 'holdem']} · {saved.opts.mode === 'tournament' ? 'Tournoi' : 'Cash game'} · {saved.seats.length} joueurs · main n°{saved.handNo} · tes jetons :{' '}
                 {saved.seats.find((x) => x.id === 'hero')?.stack ?? 0} ·{' '}
                 {new Date(saved.ts).toLocaleString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
               </small>

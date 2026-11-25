@@ -1,5 +1,5 @@
 import { type Card, createRng, fullDeck, RANKS, rankValue, suitOf } from './cards';
-import { evaluateBest, HandCategory } from './evaluator';
+import { bestScore, evaluateBest, HandCategory } from './evaluator';
 import type { HandState } from './holdem';
 import { callPrice, callShoveRange, effectiveBB, pushRange, stageOf, type StageInfo } from './tourney';
 import { eqVsTops } from './preflopTable';
@@ -91,6 +91,11 @@ export function positionOf(hand: HandState, index: number): string {
 
 export const openRange = (pos: string, headsUp: boolean) => (headsUp ? 0.8 : pos === 'UTG*' ? OPEN_FULL_UTG : OPEN[pos] ?? 0.2);
 
+/** Omaha : on ouvre un peu plus large qu'au Hold'em (les mains sont plus proches en équité). */
+const OPEN_OMAHA: Record<string, number> = { UTG: 0.17, 'UTG+1': 0.15, MP: 0.19, HJ: 0.24, CO: 0.32, BTN: 0.45, SB: 0.33, BB: 0.4 };
+export const openRangeFor = (omaha: boolean, pos: string, headsUp: boolean) =>
+  omaha ? (headsUp ? 0.75 : pos === 'UTG*' ? 0.13 : OPEN_OMAHA[pos] ?? 0.22) : openRange(pos, headsUp);
+
 /* ---------- Ranges estimées des adversaires ---------- */
 
 export interface OpponentRange {
@@ -141,6 +146,10 @@ export function estimateRanges(hand: HandState, heroId: string): OpponentRange[]
   const headsUp = hand.players.filter((p) => !p.out).length === 2;
   const pre = hand.log.filter((a) => a.street === 'preflop' && a.type !== 'post');
   const res: OpponentRange[] = [];
+  // Omaha : pas de « tapis ou se coucher » en Pot Limit, et on paie plus large
+  const omaha = hand.config.variant === 'omaha';
+  const pushFold = hand.config.structure === 'NL' && !omaha;
+  const openOf = (pos: string) => openRangeFor(omaha, pos, headsUp);
   hand.players.forEach((p, i) => {
     if (p.id === heroId || p.out || p.folded) return;
     let raisesBefore = 0;
@@ -149,14 +158,14 @@ export function estimateRanges(hand: HandState, heroId: string): OpponentRange[]
     for (const a of pre) {
       if (a.playerId === p.id) {
         const shoveBB = a.allIn ? a.amount / hand.config.bigBlind : 0;
-        if ((a.type === 'raise' || a.type === 'bet') && shoveBB > 0 && shoveBB <= 25) {
+        if ((a.type === 'raise' || a.type === 'bet') && pushFold && shoveBB > 0 && shoveBB <= 25) {
           // tapis court : range de « tapis ou se coucher », bien plus large qu'une relance profonde
           const pos = positionOf(hand, i);
           top = raisesBefore === 0 ? pushRange(pos, shoveBB, headsUp) : raisesBefore === 1 ? Math.min(0.35, 0.14 * Math.pow(20 / shoveBB, 0.6)) : 0.06;
           why = raisesBefore === 0 ? `tapis à ${Math.round(shoveBB)} BB (${POSITION_FR[pos]})` : `relance à tapis à ${Math.round(shoveBB)} BB`;
         } else if (a.type === 'raise' || a.type === 'bet') {
           if (raisesBefore === 0) {
-            top = openRange(positionOf(hand, i), headsUp);
+            top = openOf(positionOf(hand, i));
             why = `relance d’ouverture (${POSITION_FR[positionOf(hand, i)]})`;
           } else if (raisesBefore === 1) {
             top = 0.07;
@@ -170,17 +179,17 @@ export function estimateRanges(hand: HandState, heroId: string): OpponentRange[]
           }
         } else if (a.type === 'call') {
           const facing = hand.log.filter((x) => x.street === 'preflop' && (x.type === 'raise' || x.type === 'bet')).slice(0, raisesBefore).pop();
-          if (raisesBefore >= 1 && facing?.allIn && facing.amount / hand.config.bigBlind <= 25) {
+          if (pushFold && raisesBefore >= 1 && facing?.allIn && facing.amount / hand.config.bigBlind <= 25) {
             top = Math.min(top, callShoveRange(top === 1 ? 0.3 : top, facing.amount / hand.config.bigBlind));
             why = 'a payé un tapis';
           } else if (raisesBefore === 0) {
-            top = Math.min(top, 0.45);
+            top = Math.min(top, omaha ? 0.6 : 0.45);
             why = 'a suivi sans relancer';
           } else if (raisesBefore === 1) {
-            top = Math.min(top, i === hand.bbIndex ? 0.4 : 0.22);
+            top = Math.min(top, i === hand.bbIndex ? (omaha ? 0.55 : 0.4) : omaha ? 0.32 : 0.22);
             why = i === hand.bbIndex ? 'défend sa grosse blind' : 'a suivi une relance';
           } else {
-            top = Math.min(top, 0.08);
+            top = Math.min(top, omaha ? 0.12 : 0.08);
             why = 'a suivi un 3-bet';
           }
         } else if (a.type === 'check') {
@@ -285,7 +294,7 @@ export function handClass(hole: Card[], board: Card[]): 0 | 1 | 2 | 3 | 4 {
 }
 
 /** Probabilité qu'une main de chaque catégorie fasse cette action (parole, suivi, mise, relance). */
-const ACCEPT: number[][] = [
+export const ACCEPT: number[][] = [
   [1, 0.9, 1, 0.75, 0.4],
   [0.2, 1, 0.75, 1, 0.85],
   [0.3, 0.7, 0.45, 0.9, 1],
@@ -331,11 +340,11 @@ export function equityVsRanges(hole: Card[], board: Card[], ranges: RangeSpec[],
         full.push(c);
       }
     }
-    const mine = evaluateBest([...hole, ...full]).score;
+    const mine = bestScore([...hole, ...full]);
     let ties = 0;
     let lost = false;
     for (const h of opp) {
-      const s = evaluateBest([...h, ...full]).score;
+      const s = bestScore([...h, ...full]);
       if (s > mine) {
         lost = true;
         break;

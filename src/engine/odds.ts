@@ -1,6 +1,6 @@
 import { type Card, createRng, fullDeck, rankValue, suitOf } from './cards';
 import { HAND_RANKING } from './handRanking';
-import { CATEGORY_NAMES_FR, evaluateBest, HandCategory } from './evaluator';
+import { bestScore, CATEGORY_NAMES_FR, evaluateBest, HandCategory } from './evaluator';
 
 /** Nom court d'une main de départ : « AKs », « QJo », « 77 ». */
 export function startingHandName(hole: Card[]): string {
@@ -29,12 +29,12 @@ export function equity(hole: Card[], board: Card[], opponents: number, iteration
       [deck[i], deck[j]] = [deck[j], deck[i]];
     }
     const fullBoard = board.concat(deck.slice(opponents * 2, need));
-    const mine = evaluateBest([...hole, ...fullBoard]).score;
+    const mine = bestScore([...hole, ...fullBoard]);
     let best = 0;
     let ties = 0;
     let lost = false;
     for (let o = 0; o < opponents; o++) {
-      const s = evaluateBest([deck[o * 2], deck[o * 2 + 1], ...fullBoard]).score;
+      const s = bestScore([deck[o * 2], deck[o * 2 + 1], ...fullBoard]);
       if (s > mine) {
         lost = true;
         break;
@@ -83,8 +83,8 @@ export function outs(hole: Card[], board: Card[]): Out[] {
 }
 
 /** Probabilité de toucher au moins un out (prochaine carte, et jusqu'à la river depuis le flop). */
-export function hitChances(outCount: number, boardLen: number) {
-  const unseen = 52 - 2 - boardLen;
+export function hitChances(outCount: number, boardLen: number, holeLen = 2) {
+  const unseen = 52 - holeLen - boardLen;
   const next = outCount / unseen;
   const byRiver = boardLen === 3 ? 1 - ((unseen - outCount) / unseen) * ((unseen - 1 - outCount) / (unseen - 1)) : next;
   return { next, byRiver };

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BOT_STYLES, pickBots, styleFor, type BotLevel } from '../engine/bots';
 import type { TimerPreset } from './timer';
-import { applyAction, startHand, stacksAfter, type BettingStructure, type HandState, type PlayerAction, type SeatInput } from '../engine/holdem';
+import { applyAction, startHand, stacksAfter, type BettingStructure, type GameVariant, type HandState, type PlayerAction, type SeatInput } from '../engine/holdem';
 import { styledBot } from '../engine/bots';
 import { clearGame, saveGame, type SavedGame } from './save';
 import { thinkTime, type BotPace } from '../engine/thinking';
@@ -20,6 +20,8 @@ export const avatarFor = (name: string) => {
 export type GameMode = 'cash' | 'tournament';
 
 export interface CashGameOptions {
+  /** jeu : Texas Hold'em (par défaut) ou Omaha */
+  variant?: GameVariant;
   mode: GameMode;
   structure: BettingStructure;
   bigBlind: number;
@@ -84,6 +86,7 @@ export function useCashGame(opts: CashGameOptions, resume?: SavedGame | null) {
     handNoRef.current = no;
     const lv = tourney ? BLIND_LEVELS[levelFor(no, opts.speed)] : { sb: opts.bigBlind / 2, bb: opts.bigBlind, ante: 0 };
     const config = {
+      variant: opts.variant && opts.variant !== 'holdem' ? opts.variant : undefined,
       structure: opts.structure,
       smallBlind: lv.sb,
       bigBlind: lv.bb,
@@ -95,7 +98,7 @@ export function useCashGame(opts: CashGameOptions, resume?: SavedGame | null) {
     scriptRef.current = { seats: seatsRef.current.map((x) => ({ ...x })), config };
     setHand(startHand(seatsRef.current, config));
     setHandNo(no);
-  }, [opts.bigBlind, opts.buyInBB, opts.structure, opts.speed, tourney]);
+  }, [opts.bigBlind, opts.buyInBB, opts.structure, opts.speed, opts.variant, tourney]);
 
   const act = useCallback((a: PlayerAction) => {
     setHand((h) => (h ? applyAction(h, a) : h));
@@ -172,8 +175,8 @@ export function useCashGame(opts: CashGameOptions, resume?: SavedGame | null) {
   useEffect(() => {
     if (!tourneyOver || !heroPlace || tourneySaved.current) return;
     tourneySaved.current = true;
-    saveTourney({ ts: Date.now(), place: heroPlace, players: total, hands: handNoRef.current, level: LEVEL_FR[opts.level] });
-  }, [tourneyOver, heroPlace, total, opts.level]);
+    saveTourney({ ts: Date.now(), place: heroPlace, players: total, hands: handNoRef.current, level: LEVEL_FR[opts.level], game: opts.variant ?? 'holdem' });
+  }, [tourneyOver, heroPlace, total, opts.level, opts.variant]);
 
   return {
     hand,

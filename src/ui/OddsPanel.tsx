@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
 import type { Card } from '../engine/cards';
-import { CATEGORY_NAMES_FR, evaluateBest } from '../engine/evaluator';
+import { omahaFeatures, omahaName, omahaTop } from '../engine/omaha';
+import { omahaPreflopChart, type OmahaChart } from '../engine/omahaAdvice';
+import { madeHandFr, outsFor, variantOf } from '../engine/variant';
 import { legalActions, potTotal, type HandState } from '../engine/holdem';
-import { hitChances, outs, potOddsNeeded, startingHandName } from '../engine/odds';
+import { hitChances, potOddsNeeded, startingHandName } from '../engine/odds';
 import {
   ADVICE_FR,
   estimateRanges,
@@ -38,18 +40,22 @@ export function OddsPanel({ hand, heroId, raiseTo, onClose }: Props) {
   const board = hand.board;
   const live = hand.street !== 'complete' && hand.street !== 'showdown';
   const ranges = useMemo(() => (live ? estimateRanges(hand, heroId) : []), [hand, heroId, live]);
-  const eq = useEquity(hero.folded ? [] : hole, board, ranges.map((r) => ({ top: r.top, post: r.post })));
+  const variant = variantOf(hand);
+  const omaha = variant === 'omaha';
+  const eq = useEquity(hero.folded ? [] : hole, board, ranges.map((r) => ({ top: r.top, post: r.post })), omaha);
 
-  const name = hole.length === 2 ? startingHandName(hole) : '';
-  const made = board.length >= 3 && !hero.folded ? CATEGORY_NAMES_FR[evaluateBest([...hole, ...board]).category] : null;
+  const name = omaha ? omahaName(hole) : hole.length === 2 ? startingHandName(hole) : '';
+  const handTop = omaha ? omahaTop(hole) : topPercent(name);
+  const made = board.length >= 3 && !hero.folded ? madeHandFr(variant, hole, board) : null;
   const pos = positionOf(hand, heroIndex);
-  const chart = useMemo(() => (hero.folded ? null : preflopChart(hand, heroIndex)), [hand, heroIndex, hero.folded]);
+  const chart = useMemo(() => (hero.folded || omaha ? null : preflopChart(hand, heroIndex)), [hand, heroIndex, hero.folded, omaha]);
+  const oChart = useMemo(() => (hero.folded || !omaha ? null : omahaPreflopChart(hand, heroIndex)), [hand, heroIndex, hero.folded, omaha]);
   const outInfo = useMemo(() => {
     if (board.length < 3 || board.length > 4 || hero.folded) return null;
-    const o = outs(hole, board);
+    const o = outsFor(variant, hole, board);
     const byCat = new Map<string, Card[]>();
     for (const x of o) byCat.set(x.makes, [...(byCat.get(x.makes) ?? []), x.card]);
-    return { count: o.length, byCat: [...byCat.entries()], chances: hitChances(o.length, board.length) };
+    return { count: o.length, byCat: [...byCat.entries()], chances: hitChances(o.length, board.length, hole.length) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hole.join(''), board.join(''), hero.folded]);
 
@@ -61,7 +67,7 @@ export function OddsPanel({ hand, heroId, raiseTo, onClose }: Props) {
   const risk = raiseTo && legal?.canBetOrRaise ? raiseTo - hero.bet : 0;
   const feNeed = foldEquityNeeded(risk, pot);
   const fair = ranges.length ? 1 / (ranges.length + 1) : 0;
-  const heroAdvice = chart && name ? chart.advise(name) : null;
+  const heroAdvice = chart && name ? chart.advise(name) : oChart ? oChart.adviseTop(handTop) : null;
   const stage = useMemo(() => stageOf(hand), [hand]);
   const effBB = effectiveBB(hand, heroIndex);
   const lastBet = [...hand.log].reverse().find((a) => a.street === hand.street && (a.type === 'bet' || a.type === 'raise'));
@@ -82,11 +88,12 @@ export function OddsPanel({ hand, heroId, raiseTo, onClose }: Props) {
           <section className="hand-id">
             <div className="hand-name">{name}</div>
             <div>
-              <div>{topLabel(topPercent(name))} des mains de départ</div>
+              <div>{topLabel(handTop)} des mains de départ{omaha ? ' d’Omaha' : ''}</div>
               <div className="muted">
                 {POSITION_FR[pos]}
                 {made && <> · {made}</>}
               </div>
+              {omaha && <div className="muted small">{omahaFeatures(hole).join(' · ')}</div>}
             </div>
           </section>
 
@@ -121,6 +128,26 @@ export function OddsPanel({ hand, heroId, raiseTo, onClose }: Props) {
               </div>
               <div className="legend">
                 {chart.legend.map((l) => (
+                  <span key={l.a}>
+                    <i className={`a-${l.a}`} /> {l.label}
+                  </span>
+                ))}
+              </div>
+              {heroAdvice && (
+                <p className={`verdict a-${heroAdvice}`}>
+                  Avec {name} : <b>{ADVICE_FR[heroAdvice]}</b>
+                </p>
+              )}
+            </section>
+          )}
+
+          {oChart && (
+            <section>
+              <h4>{oChart.title}</h4>
+              <p className="muted small">{stage ? oChart.detail.split(` ${stage.label} :`)[0] : oChart.detail}</p>
+              <TopScale chart={oChart} t={handTop} />
+              <div className="legend">
+                {oChart.legend.map((l) => (
                   <span key={l.a}>
                     <i className={`a-${l.a}`} /> {l.label}
                   </span>
@@ -215,6 +242,24 @@ export function OddsPanel({ hand, heroId, raiseTo, onClose }: Props) {
         </>
       )}
     </aside>
+  );
+}
+
+/** Échelle des mains d'Omaha, de la meilleure (à gauche) à la pire, colorée selon le conseil, avec ta main repérée. */
+function TopScale({ chart, t }: { chart: OmahaChart; t: number }) {
+  const segs: { a: string; from: number; to: number }[] = [];
+  for (let k = 0; k < 100; k++) {
+    const a = chart.adviseTop((k + 0.5) / 100);
+    const last = segs[segs.length - 1];
+    if (last && last.a === a) last.to = k + 1;
+    else segs.push({ a, from: k, to: k + 1 });
+  }
+  return (
+    <div className="top-scale" role="img" aria-label={`Ta main : top ${Math.round(t * 100)} %`}>
+      {segs.map((s) => <i key={s.from} className={`a-${s.a}`} style={{ left: `${s.from}%`, width: `${s.to - s.from}%` }} />)}
+      <em style={{ left: `${Math.min(99, t * 100)}%` }} />
+      <span className="ends"><small>meilleures mains</small><small>pires mains</small></span>
+    </div>
   );
 }
 

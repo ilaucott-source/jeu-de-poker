@@ -1,9 +1,12 @@
 import { createRng, type Card } from './cards';
 import { legalActions, potTotal, type HandState, type PlayerAction } from './holdem';
-import { outs, startingHandName } from './odds';
-import { equityVsRanges, estimateRanges, handClass, openRange, positionOf, preflopContext, topPercent, type RangeSpec } from './ranges';
+import { startingHandName } from './odds';
+import { estimateRanges, openRange, positionOf, preflopContext, topPercent, type RangeSpec } from './ranges';
 import { eqVsTops } from './preflopTable';
 import { callPrice, pushRange } from './tourney';
+import { omahaTop } from './omaha';
+import { omahaPreflopChart } from './omahaAdvice';
+import { classFor, equityFor, outsFor, variantOf } from './variant';
 
 export type BotLevel = 'facile' | 'moyen' | 'difficile' | 'expert';
 
@@ -97,7 +100,52 @@ function passive(state: HandState, wantCall: boolean): PlayerAction {
  * ICM ignoré en partie, top paire surestimée) mais plus d'absurdités.
  */
 export function styledBot(state: HandState, style: BotStyle, rng: () => number = Math.random): PlayerAction {
-  return state.street === 'preflop' ? preflop(state, style, rng) : postflop(state, style, rng);
+  if (state.street === 'preflop') return state.config.variant === 'omaha' ? omahaPreflop(state, style, rng) : preflop(state, style, rng);
+  return postflop(state, style, rng);
+}
+
+/** Relance « au pot » (le maximum en Pot Limit), limitée à ce qui est permis. */
+function potRaise(state: HandState, frac = 1): PlayerAction {
+  const legal = legalActions(state)!;
+  const pot = potTotal(state) + legal.callAmount;
+  return raiseOrShove(state, state.currentBet + pot * frac);
+}
+
+/** Omaha avant le flop : même raisonnement qu'au Hold'em (position, ranges, cote, ICM), avec les mains à 4 cartes. */
+function omahaPreflop(state: HandState, s: BotStyle, rng: () => number): PlayerAction {
+  const legal = legalActions(state)!;
+  const idx = state.toAct!;
+  const me = state.players[idx];
+  const chart = omahaPreflopChart(state, idx);
+  if (!chart) return passive(state, false);
+  // les moins doués situent mal leur main, et les joueurs larges se croient plus forts qu'ils ne sont
+  const raw = clamp01(omahaTop(me.holeCards) + (rng() - 0.5) * (1 - s.skill) * 0.2);
+  const loose = Math.pow(s.looseness, 0.8);
+  const t = raw / loose;
+  const adv = chart.adviseTop(t);
+  const raises = state.log.filter((a) => a.street === 'preflop' && (a.type === 'raise' || a.type === 'bet')).length;
+  const big = legal.callAmount >= me.stack * 0.4;
+  if (adv === 'raise') {
+    if (!legal.canBetOrRaise) return passive(state, true);
+    // les joueurs passifs se contentent parfois de suivre
+    if (rng() > 0.35 + s.aggression * 0.65 && raw > 0.02) return passive(state, true);
+    const frac = s.skill > 0.6 ? 1 : 0.6 + rng() * 0.4;
+    return potRaise(state, frac);
+  }
+  if (adv === 'call') {
+    if (legal.canCheck) {
+      // bluff de position : parfois une relance avec une main jouable
+      if (legal.canBetOrRaise && raises === 0 && rng() < s.bluff * 0.15) return potRaise(state, 0.8);
+      return { type: 'check' };
+    }
+    if (legal.canBetOrRaise && !big && raises === 1 && raw <= 0.2 && rng() < s.bluff * 0.3) return potRaise(state);
+    return { type: 'call' };
+  }
+  // main à jeter : les « payeurs » suivent quand même parfois une petite mise
+  if (legal.canCheck) return { type: 'check' };
+  const cheap = legal.callAmount <= state.config.bigBlind * (raises ? 4 : 1);
+  if (cheap && !big && t <= 0.65 && rng() < s.calling * 0.45) return { type: 'call' };
+  return { type: 'fold' };
 }
 
 /** Joueurs qui ont mis de l'argent dans le pot préflop (relance ou call) : ce sont eux qu'on affronte. */
@@ -213,15 +261,16 @@ function postflop(state: HandState, s: BotStyle, rng: () => number): PlayerActio
   const opps = ranges.length;
   const fair = 1 / (opps + 1);
   const hole = me.holeCards as Card[];
+  const variant = variantOf(state);
 
   // Tous les bots estiment leur équité contre les mains probables ; les moins doués ne lisent que l'action préflop
   const specs: RangeSpec[] = ranges.map((r) => (s.skill >= 0.45 ? { top: r.top, post: r.post } : Math.min(1, r.top * 1.3)));
-  let e = equityVsRanges(hole, state.board, specs, Math.round(110 + s.skill * 220), Math.floor(rng() * 1e9));
-  const cls = handClass(hole, state.board);
+  let e = equityFor(variant, hole, state.board, specs, Math.round(110 + s.skill * 220), Math.floor(rng() * 1e9));
+  const cls = classFor(variant, hole, state.board);
   if (cls === 3) e += (1 - s.skill) * 0.06; // erreur plausible : on surestime sa top paire
   e = clamp01(e + (rng() - 0.5) * (1 - s.skill) * 0.12);
 
-  const draws = state.board.length < 5 ? outs(hole, state.board).length : 0;
+  const draws = state.board.length < 5 ? outsFor(variant, hole, state.board).length : 0;
   const drawy = draws >= 8;
   const edge = e - fair;
   const lateStreet = state.board.length === 5;

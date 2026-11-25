@@ -1,5 +1,5 @@
 import { type Card, createRng, fullDeck, shuffle } from './cards';
-import { evaluateBest, type HandValue } from './evaluator';
+import { evaluateBest, evaluateOmaha, type HandValue } from './evaluator';
 
 /** NL = No Limit, PL = Pot Limit, FL = Limit (Fixed Limit). */
 export type BettingStructure = 'NL' | 'PL' | 'FL';
@@ -56,7 +56,12 @@ export interface PotResult {
   hand?: string;
 }
 
+/** Jeu : Texas Hold'em (2 cartes) ou Omaha (4 cartes, on en utilise exactement 2). */
+export type GameVariant = 'holdem' | 'omaha';
+
 export interface HandConfig {
+  /** absent = Texas Hold'em (anciennes parties) */
+  variant?: GameVariant;
   structure: BettingStructure;
   smallBlind: number;
   bigBlind: number;
@@ -200,8 +205,9 @@ export function startHand(seats: SeatInput[], config: HandConfig): HandState {
   state.log.push({ playerId: players[bbIndex].id, type: 'post', amount: bb, street: 'preflop', label: 'grosse blind', allIn: players[bbIndex].allIn });
   state.currentBet = Math.max(config.bigBlind, ...players.map((p) => p.bet));
 
-  // Distribution : deux cartes chacun, en commençant à gauche du bouton
-  for (let round = 0; round < 2; round++) {
+  // Distribution : deux cartes chacun (quatre à l'Omaha), en commençant à gauche du bouton
+  const holeCount = config.variant === 'omaha' ? 4 : 2;
+  for (let round = 0; round < holeCount; round++) {
     let i = sbIndex;
     for (let k = 0; k < live.length; k++) {
       players[i].holeCards.push(state.deck.shift()!);
@@ -415,7 +421,8 @@ function showdown(state: HandState): HandState {
   }
   state.street = 'showdown';
   const values: Record<string, HandValue> = {};
-  for (const p of state.players.filter(inHand)) values[p.id] = evaluateBest([...p.holeCards, ...state.board]);
+  const omaha = state.config.variant === 'omaha';
+  for (const p of state.players.filter(inHand)) values[p.id] = omaha ? evaluateOmaha(p.holeCards, state.board) : evaluateBest([...p.holeCards, ...state.board]);
   state.showdown = values;
 
   const pots = buildPots(state.players);

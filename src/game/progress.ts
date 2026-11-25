@@ -1,4 +1,15 @@
 import type { HandRecord, TourneyRecord } from './history';
+import type { GameVariant } from '../engine/holdem';
+
+/** Zones conseillées propres à l'Omaha (on y joue un peu plus de mains, on y relance moins avant le flop). */
+const OMAHA_ZONES: Record<string, { lo: number; hi: number; low?: string; high?: string }> = {
+  vpip: { lo: 0.22, hi: 0.35, low: 'Tu joues très peu de mains, même pour l’Omaha : ouvre plus en fin de parole avec les mains connectées et suitées.', high: 'Tu joues trop de mains : à l’Omaha, les mains moyennes font des deuxièmes meilleures mains qui coûtent cher. Garde les mains connectées, suitées (à l’As) et les belles paires.' },
+  pfr: { lo: 0.12, hi: 0.25 },
+  '3bet': { lo: 0.04, hi: 0.1, low: 'Tu sur-relances rarement : avec les paires d’As bien accompagnées et les meilleures mains connectées double suitées, sur-relance au pot.', high: 'Tu sur-relances beaucoup : à l’Omaha, les équités sont proches avant le flop, garde la sur-relance pour les meilleures mains.' },
+  af: { lo: 1.2, hi: 3 },
+  wtsd: { lo: 0.26, hi: 0.38 },
+  wsd: { lo: 0.46, hi: 0.58 },
+};
 
 export interface StatLine {
   key: string;
@@ -16,7 +27,7 @@ export interface StatLine {
 
 const ratio = (a: number, b: number) => (b > 0 ? a / b : null);
 
-export function summarize(hands: HandRecord[]) {
+export function summarize(hands: HandRecord[], game: GameVariant | 'all' = 'holdem') {
   const n = hands.length;
   const netBB = hands.reduce((s, h) => s + h.net / h.bb, 0);
   const f = (k: keyof HandRecord['flags']) => hands.filter((h) => h.flags[k]).length;
@@ -61,6 +72,12 @@ export function summarize(hands: HandRecord[]) {
       high: 'Tu gagnes presque toujours à l’abattage : tu pourrais miser plus souvent pour la valeur, ou payer un peu plus large.',
     },
   ];
+
+  if (game === 'omaha')
+    for (const l of lines) {
+      const z = OMAHA_ZONES[l.key];
+      if (z) Object.assign(l, { lo: z.lo, hi: z.hi }, z.low ? { low: z.low } : {}, z.high ? { high: z.high } : {});
+    }
 
   const byPos = new Map<string, { n: number; net: number }>();
   for (const h of hands) {
