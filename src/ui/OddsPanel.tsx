@@ -14,6 +14,8 @@ import {
   preflopChart,
   topPercent,
 } from '../engine/ranges';
+import { callPrice, effectiveBB, stageOf } from '../engine/tourney';
+import { stageTip } from '../engine/tips';
 import { CardView } from './CardView';
 import { useEquity } from './useEquity';
 import { isCompactLandscape } from './layout';
@@ -36,7 +38,7 @@ export function OddsPanel({ hand, heroId, raiseTo, onClose }: Props) {
   const board = hand.board;
   const live = hand.street !== 'complete' && hand.street !== 'showdown';
   const ranges = useMemo(() => (live ? estimateRanges(hand, heroId) : []), [hand, heroId, live]);
-  const eq = useEquity(hero.folded ? [] : hole, board, ranges.map((r) => r.top));
+  const eq = useEquity(hero.folded ? [] : hole, board, ranges.map((r) => ({ top: r.top, post: r.post })));
 
   const name = hole.length === 2 ? startingHandName(hole) : '';
   const made = board.length >= 3 && !hero.folded ? CATEGORY_NAMES_FR[evaluateBest([...hole, ...board]).category] : null;
@@ -60,6 +62,11 @@ export function OddsPanel({ hand, heroId, raiseTo, onClose }: Props) {
   const feNeed = foldEquityNeeded(risk, pot);
   const fair = ranges.length ? 1 / (ranges.length + 1) : 0;
   const heroAdvice = chart && name ? chart.advise(name) : null;
+  const stage = useMemo(() => stageOf(hand), [hand]);
+  const effBB = effectiveBB(hand, heroIndex);
+  const lastBet = [...hand.log].reverse().find((a) => a.street === hand.street && (a.type === 'bet' || a.type === 'raise'));
+  const price = myTurn && toCall > 0 && lastBet && stage && stage.pressure > 0 && toCall >= hero.stack * 0.4 ? callPrice(hand, heroIndex, hand.players.findIndex((p) => p.id === lastBet.playerId)) : null;
+  const needAll = price ? Math.max(need, price.icm) : need;
 
   return (
     <aside className="odds-panel" aria-label="Statistiques de ta main">
@@ -83,10 +90,23 @@ export function OddsPanel({ hand, heroId, raiseTo, onClose }: Props) {
             </div>
           </section>
 
+          {stage && (
+            <section className="stage-box">
+              <h4>
+                {stage.label} · {stage.alive} joueurs, {stage.paid > 1 ? `${stage.paid} payés` : 'le gagnant prend tout'}
+              </h4>
+              <p className="small">
+                Ton tapis effectif : <b>{Math.round(effBB)} BB</b> · moyenne {Math.round(stage.avgBB)} BB
+                {stage.pressure > 0 && <> · pression ICM {stage.pressure >= 1 ? 'maximale' : stage.pressure >= 0.5 ? 'forte' : 'présente'}</>}
+              </p>
+              <p className="muted small stage-tip">{stageTip(stage)}</p>
+            </section>
+          )}
+
           {chart && (
             <section>
               <h4>{chart.title}</h4>
-              <p className="muted small">{chart.detail}</p>
+              <p className="muted small">{stage ? chart.detail.split(` ${stage.label} :`)[0] : chart.detail}</p>
               <div className="range-grid" role="img" aria-label="Grille des mains conseillées">
                 {GRID_LABELS.map((_, r) =>
                   GRID_LABELS.map((__, c) => {
@@ -140,9 +160,10 @@ export function OddsPanel({ hand, heroId, raiseTo, onClose }: Props) {
             <section>
               <h4>Pour suivre {toCall}</h4>
               <p>
-                Il te faut <b>{pct(need)}</b> de chances de gagner.{' '}
+                Il te faut <b>{pct(needAll)}</b> de chances de gagner
+                {price && price.icm > need + 0.015 ? <> (ICM : {pct(need)} en jetons, mais perdre ton tapis coûte plus que le doubler ne rapporte)</> : null}.{' '}
                 {eq &&
-                  (eq.vsRange >= need ? (
+                  (eq.vsRange >= needAll ? (
                     <span className="good">Tu as {pct(eq.vsRange)} : suivre est rentable.</span>
                   ) : (
                     <span className="bad">Tu as {pct(eq.vsRange)} : pas assez, sauf gains futurs.</span>

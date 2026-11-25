@@ -34,6 +34,8 @@ export interface HandRecord {
     calls: number;
   };
   decisions?: Decision[];
+  /** version de l'analyse qui a produit ces décisions */
+  analysisV?: number;
 }
 
 export interface TourneyRecord {

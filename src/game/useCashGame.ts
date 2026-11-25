@@ -5,10 +5,10 @@ import { applyAction, startHand, stacksAfter, type BettingStructure, type HandSt
 import { styledBot } from '../engine/bots';
 import { clearGame, saveGame, type SavedGame } from './save';
 import { thinkTime, type BotPace } from '../engine/thinking';
-import { analyzeHand, type HandScript } from '../engine/analysis';
+import { analyzeHand, ANALYSIS_VERSION, type HandScript } from '../engine/analysis';
 import { recordFromHand, saveHand, saveTourney, updateHand } from './history';
 import { LEVEL_FR } from '../engine/bots';
-import { BLIND_LEVELS, levelFor, SPEED, TOURNEY_STACK, type TourneySpeed } from './tournament';
+import { BLIND_LEVELS, levelFor, payouts, SPEED, TOURNEY_STACK, type TourneySpeed } from './tournament';
 
 export const HERO_ID = 'hero';
 export const BOTS = BOT_STYLES.map((b) => ({ name: b.name, avatar: b.avatar }));
@@ -90,6 +90,7 @@ export function useCashGame(opts: CashGameOptions, resume?: SavedGame | null) {
       ante: lv.ante || undefined,
       buttonIndex: b,
       seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0,
+      tourney: tourney ? { payouts: payouts(n) } : undefined,
     };
     scriptRef.current = { seats: seatsRef.current.map((x) => ({ ...x })), config };
     setHand(startHand(seatsRef.current, config));
@@ -131,7 +132,7 @@ export function useCashGame(opts: CashGameOptions, resume?: SavedGame | null) {
         setLastRecordId(rec.id);
         setTimeout(() => {
           try {
-            updateHand(rec.id, { decisions: analyzeHand(rec.script, HERO_ID) });
+            updateHand(rec.id, { decisions: analyzeHand(rec.script, HERO_ID), analysisV: ANALYSIS_VERSION });
           } catch {
             /* analyse impossible : la main reste dans l'historique */
           }

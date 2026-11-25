@@ -97,6 +97,7 @@ export function summarizeTourneys(list: TourneyRecord[]) {
 export const POS_SHORT: Record<string, string> = { UTG: 'UTG', 'UTG+1': 'UTG+1', MP: 'Milieu', HJ: 'Hijack', CO: 'Cut-off', BTN: 'Bouton', SB: 'Petite blind', BB: 'Grosse blind' };
 
 export const MISTAKE_FR: Record<string, { label: string; tip: string }> = {
+  'icm-call': { label: 'Tapis payés trop légèrement en tournoi (ICM)', tip: 'Près des places payées, il faut nettement plus que la cote du pot pour payer un tapis : sauter coûte plus que doubler ne rapporte.' },
   'pre-loose': { label: 'Mains trop faibles jouées avant le flop', tip: 'Suis la grille des Stats : en début de parole, couche les mains hors du top conseillé.' },
   'pre-tight': { label: 'Bonnes mains couchées avant le flop', tip: 'Ces mains sont rentables à cette position : ose les jouer.' },
   'pre-passive': { label: 'Call au lieu de relancer avant le flop', tip: 'Avec une main forte, relance : tu gagnes plus et tu réduis le nombre d’adversaires.' },

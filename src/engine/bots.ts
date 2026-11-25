@@ -1,8 +1,9 @@
 import { createRng, type Card } from './cards';
 import { legalActions, potTotal, type HandState, type PlayerAction } from './holdem';
 import { outs, startingHandName } from './odds';
-import { postflopStrength } from './bot';
-import { equityVsRanges, estimateRanges, openRange, positionOf, topPercent } from './ranges';
+import { equityVsRanges, estimateRanges, handClass, openRange, positionOf, preflopContext, topPercent, type RangeSpec } from './ranges';
+import { eqVsTops } from './preflopTable';
+import { callPrice, pushRange } from './tourney';
 
 export type BotLevel = 'facile' | 'moyen' | 'difficile' | 'expert';
 
@@ -65,6 +66,7 @@ export const styleFor = (name: string) => BOT_STYLES.find((b) => b.name === name
 /* ------------------------------------------------------------------ */
 
 const clampTo = (to: number, min: number, max: number) => Math.max(min, Math.min(max, Math.round(to)));
+const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 
 function raiseAction(state: HandState, to: number): PlayerAction {
   const legal = legalActions(state)!;
@@ -73,15 +75,34 @@ function raiseAction(state: HandState, to: number): PlayerAction {
   return { type: legal.isBet ? 'bet' : 'raise', to: t };
 }
 
+/** Mise ou relance ; si elle engagerait presque tout le tapis, on pousse directement. */
+function raiseOrShove(state: HandState, to: number): PlayerAction {
+  const legal = legalActions(state)!;
+  const me = state.players[state.toAct!];
+  if (legal.canBetOrRaise && state.config.structure !== 'FL' && to >= (me.stack + me.bet) * 0.6) return raiseAction(state, legal.maxTo);
+  return raiseAction(state, to);
+}
+
 function passive(state: HandState, wantCall: boolean): PlayerAction {
   const legal = legalActions(state)!;
   if (legal.canCheck) return { type: 'check' };
   return wantCall ? { type: 'call' } : { type: 'fold' };
 }
 
-/** Décision d'un bot selon sa personnalité. */
+/**
+ * Décision d'un bot selon sa personnalité.
+ * Tous les bots raisonnent en probabilités (équité contre les mains probables, cote du pot,
+ * tapis en BB, ICM en tournoi) ; leur profil change leur range et leurs penchants,
+ * et les moins doués font des erreurs plausibles (lecture approximative, un peu trop de calls,
+ * ICM ignoré en partie, top paire surestimée) mais plus d'absurdités.
+ */
 export function styledBot(state: HandState, style: BotStyle, rng: () => number = Math.random): PlayerAction {
   return state.street === 'preflop' ? preflop(state, style, rng) : postflop(state, style, rng);
+}
+
+/** Joueurs qui ont mis de l'argent dans le pot préflop (relance ou call) : ce sont eux qu'on affronte. */
+function involved(state: HandState, meId: string) {
+  return estimateRanges(state, meId).filter((r) => state.log.some((a) => a.street === 'preflop' && a.playerId === r.id && (a.type === 'call' || a.type === 'raise' || a.type === 'bet')));
 }
 
 function preflop(state: HandState, s: BotStyle, rng: () => number): PlayerAction {
@@ -89,67 +110,97 @@ function preflop(state: HandState, s: BotStyle, rng: () => number): PlayerAction
   const idx = state.toAct!;
   const me = state.players[idx];
   const bb = state.config.bigBlind;
-  const live = state.players.filter((p) => !p.out);
-  const headsUp = live.length === 2;
+  const headsUp = state.players.filter((p) => !p.out).length === 2;
   const pos = positionOf(state, idx);
   const name = startingHandName(me.holeCards);
-  // les joueurs peu doués évaluent mal leur main
-  const t = Math.min(1, Math.max(0, topPercent(name) + (rng() - 0.5) * (1 - s.skill) * 0.35));
+  const ctx = preflopContext(state, idx);
+  const nl = state.config.structure !== 'FL';
+  // les joueurs peu doués évaluent mal leur main, mais sans confondre 72o et AK
+  const t = clamp01(topPercent(name) + (rng() - 0.5) * (1 - s.skill) * 0.16);
+  const loose = Math.pow(s.looseness, 0.8);
   const raises = state.log.filter((a) => a.street === 'preflop' && (a.type === 'raise' || a.type === 'bet'));
   const limpers = state.log.filter((a) => a.street === 'preflop' && a.type === 'call').length;
-  const stackBB = (me.stack + me.bet) / bb;
   const toCall = legal.callAmount;
-  const suitedPlayable = name.endsWith('s') && (name[0] === 'A' || 'KQJT98765'.includes(name[0]));
+  const pressure = ctx.info?.pressure ?? 0;
 
-  // Tapis court (tournoi) : on pousse ou on se couche
-  if (stackBB <= 12) {
-    const pushTop = Math.min(0.7, (2.6 / stackBB) * s.looseness * (raises.length ? 0.45 : 1));
-    if (t <= pushTop) return legal.canBetOrRaise ? raiseAction(state, legal.maxTo) : passive(state, true);
-    if (toCall > 0 && toCall <= bb && t <= pushTop * 1.8) return { type: 'call' };
+  // Gros call : tapis adverse ou relance qui engage une grosse part du tapis
+  const last = raises[raises.length - 1];
+  if (last && nl && (last.allIn || toCall >= me.stack * 0.4)) {
+    const raiserIdx = state.players.findIndex((p) => p.id === last.playerId);
+    // les joueurs qui paient trop croient qu'on bluffe plus souvent
+    const ws = involved(state, me.id).map((r) => Math.min(1, r.top * (1 + s.calling * 0.6 * (1 - s.skill))));
+    const e = eqVsTops(name, ws.length ? ws : [0.1]) + (rng() - 0.5) * (1 - s.skill) * 0.1;
+    const price = callPrice(state, idx, raiserIdx);
+    // les moins doués ne tiennent compte de l'ICM qu'à moitié : erreur classique à la bulle
+    const need = price.chip + (price.icm - price.chip) * (0.4 + 0.6 * s.skill);
+    if (e >= need - s.calling * 0.04) {
+      if (legal.canBetOrRaise && !last.allIn && e > 0.62) return raiseAction(state, legal.maxTo);
+      return { type: 'call' };
+    }
     return passive(state, false);
   }
 
   if (raises.length === 0) {
     if (pos === 'BB' && legal.canCheck) {
-      const iso = 0.12 * s.looseness * (0.5 + s.aggression);
-      return t <= iso && legal.canBetOrRaise ? raiseAction(state, (3 + limpers) * bb) : { type: 'check' };
+      const iso = (nl && ctx.effBB <= 12 ? 0.25 : 0.12) * loose * (0.5 + s.aggression);
+      if (t <= iso && legal.canBetOrRaise) return nl && ctx.effBB <= 12 ? raiseAction(state, legal.maxTo) : raiseOrShove(state, (3 + limpers) * bb);
+      return { type: 'check' };
     }
-    const open = Math.min(0.9, openRange(pos, headsUp) * s.looseness * (limpers ? 0.75 : 1));
+    if (nl && ctx.effBB <= 12) {
+      // Tapis ou se coucher (ranges de Nash approchées), ajustées au profil et à la bulle
+      const push = Math.min(1, pushRange(pos, ctx.effBB, headsUp) * ctx.tighten * (0.8 + 0.2 * loose) * (limpers ? 0.7 : 1) * (1 + (rng() - 0.5) * (1 - s.skill) * 0.4));
+      if (t <= push) return raiseAction(state, legal.maxTo);
+      // erreur de débutant : suivre la blind au lieu de pousser
+      if (s.skill < 0.4 && t <= push * 1.3 && toCall <= bb && rng() < 0.4 - s.skill) return { type: 'call' };
+      return passive(state, false);
+    }
+    let open = openRange(pos, headsUp) * loose * (limpers ? 0.75 : 1) * ctx.tighten;
+    if (ctx.info && ctx.effBB <= 25 && ['CO', 'BTN', 'SB'].includes(pos)) open *= 1 + 0.15 * s.skill; // les bons joueurs volent les blinds
+    open = Math.min(0.85, open);
     if (t <= open) {
-      // relance d'ouverture ; les débutants préfèrent souvent suivre
-      if (rng() < 0.25 + s.aggression * 0.75 || t <= 0.05) {
-        const size = s.skill > 0.6 ? (pos === 'SB' ? 3 : 2.5) : 2 + Math.floor(rng() * 3);
-        return raiseAction(state, (size + limpers) * bb);
+      // relance d'ouverture ; les joueurs passifs suivent parfois
+      if (rng() < 0.3 + s.aggression * 0.7 || t <= 0.05) {
+        const size = ctx.effBB <= 25 && s.skill > 0.5 ? 2.2 : s.skill > 0.6 ? (pos === 'SB' ? 3 : 2.5) : 2 + Math.floor(rng() * 3);
+        return raiseOrShove(state, (size + limpers) * bb);
       }
       return passive(state, true);
     }
-    if (s.calling > 0.5 && t <= Math.min(0.85, open * 1.6)) return passive(state, true); // limp
+    if (s.calling > 0.5 && ctx.effBB > 20 && t <= Math.min(0.75, open * 1.5)) return passive(state, true); // limp
     return passive(state, false);
   }
 
-  const last = raises[raises.length - 1];
   const raiserIdx = state.players.findIndex((p) => p.id === last.playerId);
   const potOdds = toCall / (potTotal(state) + toCall);
   const inPosition = pos === 'BTN' || pos === 'CO';
+  // plus la relance est grosse, plus il faut une bonne main pour suivre
+  const sizeFactor = Math.max(0.35, Math.min(1, Math.pow((3 * bb) / Math.max(bb, state.currentBet), 0.6)));
 
   if (raises.length === 1) {
     const r = openRange(positionOf(state, raiserIdx), headsUp) * (s.skill > 0.6 ? 1 : 1.2);
+    if (nl && ctx.effBB <= 25) {
+      // tapis court face à une ouverture : relance à tapis ou abandon, rarement un call
+      const shove = Math.min(0.35, Math.max(0.05, r * 0.45 * Math.pow(20 / ctx.effBB, 0.5)) * ctx.tighten * Math.pow(loose, 0.5) * (0.8 + s.aggression * 0.4));
+      if (t <= shove) return raiseAction(state, legal.maxTo);
+      if (ctx.effBB > 18 && t <= shove * 1.5 * (0.7 + s.calling * 0.6) && toCall <= 3 * bb) return { type: 'call' };
+      return { type: 'fold' };
+    }
     const value = Math.max(0.03, r * 0.25) * (0.6 + s.aggression * 0.8);
-    const call = Math.min(0.6, r * 0.6 * s.looseness * (1 + s.calling * 0.6) * (pos === 'BB' ? 1.6 : 1));
-    if (t <= value) return raiseAction(state, state.currentBet * (inPosition ? 3 : 3.8));
-    if (suitedPlayable && t <= r * 1.4 && rng() < s.bluff * 0.6) return raiseAction(state, state.currentBet * (inPosition ? 3 : 3.8));
-    if (t <= call || (potOdds < 0.2 && t <= call * 1.5)) return { type: 'call' };
+    const call = Math.min(0.5, r * 0.6 * loose * (1 + s.calling * 0.5) * (pos === 'BB' ? 1.6 : 1)) * sizeFactor * (1 - 0.35 * pressure);
+    if (t <= value) return raiseOrShove(state, state.currentBet * (inPosition ? 3 : 3.8));
+    const suitedPlayable = name.endsWith('s') && (name[0] === 'A' || 'KQJT98765'.includes(name[0]));
+    if (suitedPlayable && t <= r * 1.3 && rng() < s.bluff * 0.35 * (1 - pressure * 0.5)) return raiseOrShove(state, state.currentBet * (inPosition ? 3 : 3.8));
+    if (t <= call || (potOdds < 0.2 && t <= call * 1.4)) return { type: 'call' };
     return { type: 'fold' };
   }
   if (raises.length === 2) {
     const value = 0.025 * (0.7 + s.aggression * 0.6);
-    if (t <= value) return raiseAction(state, stackBB < 40 ? legal.maxTo : state.currentBet * 2.3);
-    if ((name === 'A5s' || name === 'A4s') && rng() < s.bluff * 0.5) return raiseAction(state, state.currentBet * 2.3);
-    if (t <= 0.07 * s.looseness * (1 + s.calling * 0.5)) return { type: 'call' };
+    if (t <= value) return raiseOrShove(state, ctx.effBB < 40 ? legal.maxTo : state.currentBet * 2.3);
+    if ((name === 'A5s' || name === 'A4s') && rng() < s.bluff * 0.4 && ctx.effBB > 40) return raiseAction(state, state.currentBet * 2.3);
+    if (t <= 0.07 * Math.pow(loose, 0.5) * (1 + s.calling * 0.4) * sizeFactor) return { type: 'call' };
     return { type: 'fold' };
   }
   if (t <= 0.02) return raiseAction(state, legal.maxTo);
-  if (t <= 0.035 + s.calling * 0.02) return { type: 'call' };
+  if (t <= 0.035 + s.calling * 0.015) return { type: 'call' };
   return { type: 'fold' };
 }
 
@@ -158,47 +209,55 @@ function postflop(state: HandState, s: BotStyle, rng: () => number): PlayerActio
   const idx = state.toAct!;
   const me = state.players[idx];
   const pot = potTotal(state);
-  const opps = state.players.filter((p, i) => i !== idx && !p.folded && !p.out);
-  const fair = 1 / (opps.length + 1);
+  const ranges = estimateRanges(state, me.id);
+  const opps = ranges.length;
+  const fair = 1 / (opps + 1);
+  const hole = me.holeCards as Card[];
 
-  // Les bots doués estiment leur équité contre les ranges probables ; les autres regardent seulement leur main
-  let e: number;
-  if (s.skill >= 0.5) {
-    const ranges = estimateRanges(state, me.id).map((r) => r.top);
-    e = equityVsRanges(me.holeCards, state.board, ranges, Math.round(120 + s.skill * 220), Math.floor(rng() * 1e9));
-  } else {
-    const raw = postflopStrength(me.holeCards, state.board);
-    e = Math.min(1, raw * (0.6 + 0.4 / opps.length) + 0.05);
-  }
-  e = Math.min(1, Math.max(0, e + (rng() - 0.5) * (1 - s.skill) * 0.25));
+  // Tous les bots estiment leur équité contre les mains probables ; les moins doués ne lisent que l'action préflop
+  const specs: RangeSpec[] = ranges.map((r) => (s.skill >= 0.45 ? { top: r.top, post: r.post } : Math.min(1, r.top * 1.3)));
+  let e = equityVsRanges(hole, state.board, specs, Math.round(110 + s.skill * 220), Math.floor(rng() * 1e9));
+  const cls = handClass(hole, state.board);
+  if (cls === 3) e += (1 - s.skill) * 0.06; // erreur plausible : on surestime sa top paire
+  e = clamp01(e + (rng() - 0.5) * (1 - s.skill) * 0.12);
 
-  const draws = state.board.length < 5 ? outs(me.holeCards as Card[], state.board).length : 0;
+  const draws = state.board.length < 5 ? outs(hole, state.board).length : 0;
   const drawy = draws >= 8;
   const edge = e - fair;
   const lateStreet = state.board.length === 5;
   const sizing = (kind: 'value' | 'bluff') => {
     if (s.skill > 0.7) return pot * (lateStreet ? 0.7 : 0.55 + rng() * 0.2); // mêmes tailles en value et en bluff
     if (s.skill > 0.45) return pot * (kind === 'value' ? 0.66 : 0.5);
-    return pot * (0.3 + rng() * 0.9);
+    return pot * (0.4 + rng() * 0.5);
   };
 
   if (legal.canCheck) {
     if (!legal.canBetOrRaise) return { type: 'check' };
-    if (edge > 0.18 && rng() < 0.35 + s.aggression * 0.6) return raiseAction(state, sizing('value'));
-    if (drawy && rng() < s.aggression * 0.55) return raiseAction(state, sizing('bluff'));
-    if (edge < 0 && rng() < s.bluff * (opps.length === 1 ? 1 : 0.4)) return raiseAction(state, sizing('bluff'));
+    if (e > Math.max(0.55, fair + 0.18) && rng() < 0.4 + s.aggression * 0.55) return raiseOrShove(state, sizing('value'));
+    if (drawy && opps <= 2 && rng() < s.aggression * 0.5) return raiseOrShove(state, sizing('bluff'));
+    // bluff : surtout en tête-à-tête, avec une main qui ne gagne pas à l'abattage
+    const bluffRate = s.bluff * (opps === 1 ? 1 : 0.25) * (lateStreet ? 0.7 : 1);
+    if (edge < 0 && cls <= 1 && rng() < bluffRate) return raiseOrShove(state, sizing('bluff'));
     return { type: 'check' };
   }
 
   const toCall = legal.callAmount;
-  const need = toCall / (pot + toCall);
-  const implied = drawy && !lateStreet && s.skill > 0.5 ? 0.07 : 0;
-  // grosse main : relance
-  if (legal.canBetOrRaise && e > need + 0.3 && edge > 0.2 && rng() < s.aggression * 0.7) {
-    const to = state.currentBet * (2.6 + rng() * 0.6);
-    return raiseAction(state, me.stack + me.bet < to * 1.6 ? legal.maxTo : to);
+  let need = toCall / (pot + toCall);
+  const big = toCall >= me.stack * 0.4;
+  const last = [...state.log].reverse().find((a) => a.street === state.street && (a.type === 'bet' || a.type === 'raise'));
+  if (big && last && state.config.tourney) {
+    const vIdx = state.players.findIndex((p) => p.id === last.playerId);
+    const price = callPrice(state, idx, vIdx);
+    need = price.chip + (price.icm - price.chip) * (0.4 + 0.6 * s.skill);
   }
-  if (e + implied >= need - s.calling * 0.15) return { type: 'call' };
-  if (legal.canBetOrRaise && opps.length === 1 && rng() < s.bluff * 0.15) return raiseAction(state, state.currentBet * 2.8);
+  const implied = drawy && !lateStreet && !big && s.skill > 0.4 ? 0.06 : 0;
+  // les « payeurs » suivent un peu trop… mais beaucoup moins quand c'est tout leur tapis
+  const leak = s.calling * 0.1 * (1 - Math.min(1, toCall / Math.max(1, me.stack)) * 0.75);
+
+  if (legal.canBetOrRaise && e > 0.65 && e > need + 0.25 && rng() < s.aggression * 0.7) {
+    return raiseOrShove(state, state.currentBet * (2.5 + rng() * 0.5));
+  }
+  if (e + implied >= need - leak) return { type: 'call' };
+  if (legal.canBetOrRaise && !lateStreet && opps === 1 && (drawy || cls === 1) && !big && rng() < s.bluff * 0.25) return raiseOrShove(state, state.currentBet * 2.8);
   return { type: 'fold' };
 }

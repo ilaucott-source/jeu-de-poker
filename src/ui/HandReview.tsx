@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
-import { analyzeHand, replay, type Decision } from '../engine/analysis';
+import { analyzeHand, ANALYSIS_VERSION, replay, type Decision } from '../engine/analysis';
 import { describeHand, evaluateBest } from '../engine/evaluator';
 import type { Street } from '../engine/holdem';
 import { POSITION_FR } from '../engine/ranges';
 import { startingHandName } from '../engine/odds';
-import type { HandRecord } from '../game/history';
+import { updateHand, type HandRecord } from '../game/history';
 import { CardView } from './CardView';
 
 const STREET_FR: Record<string, string> = { preflop: 'Avant le flop', flop: 'Flop', turn: 'Turn', river: 'River' };
@@ -15,7 +15,15 @@ const fmtBB = (x: number) => `${x > 0 ? '+' : ''}${Math.round(x * 10) / 10} BB`;
 export function HandReview({ record, onClose }: { record: HandRecord; onClose: () => void }) {
   const data = useMemo(() => {
     const states = replay(record.script);
-    const decisions: Decision[] = record.decisions ?? analyzeHand(record.script, record.heroId, 400);
+    const fresh = record.decisions && record.analysisV === ANALYSIS_VERSION;
+    const decisions: Decision[] = fresh ? record.decisions! : analyzeHand(record.script, record.heroId, 400);
+    if (!fresh) {
+      try {
+        updateHand(record.id, { decisions, analysisV: ANALYSIS_VERSION });
+      } catch {
+        /* l'analyse reste affichée même si on ne peut pas l'enregistrer */
+      }
+    }
     const byAt = new Map(decisions.map((d) => [d.at, d]));
     const final = states[states.length - 1];
     const streets: { street: Street; board: string[]; lines: { who: string; hero: boolean; text: string; d?: Decision }[] }[] = [];
@@ -83,6 +91,7 @@ export function HandReview({ record, onClose }: { record: HandRecord; onClose: (
                         <b>{GRADE_FR[l.d.grade]} · </b>
                         {l.d.title}
                         <small>{l.d.detail}</small>
+                        {l.d.stage && <small className="stage-tag">{l.d.stage}</small>}
                       </div>
                     )}
                   </li>
