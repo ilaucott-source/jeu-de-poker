@@ -3,6 +3,7 @@ import { CATEGORY_NAMES_FR, evaluateBest } from './evaluator';
 import { applyAction, legalActions, potTotal, startHand, type HandConfig, type HandState, type PlayerAction, type SeatInput, type Street } from './holdem';
 import { outs, startingHandName } from './odds';
 import { ADVICE_FR, equityVsRanges, estimateRanges, positionOf, POSITION_FR, preflopChart, type Advice } from './ranges';
+import { callPrice, effectiveBB, stageOf } from './tourney';
 
 /** De quoi rejouer une main à l'identique : sièges, réglages (avec la graine du paquet) et actions. */
 export interface HandScript {
@@ -10,6 +11,9 @@ export interface HandScript {
   config: HandConfig;
   actions: PlayerAction[];
 }
+
+/** À augmenter quand l'analyse change : les anciennes mains sont réanalysées à l'ouverture. */
+export const ANALYSIS_VERSION = 2;
 
 export type Grade = 'good' | 'ok' | 'mistake';
 
@@ -26,6 +30,8 @@ export interface Decision {
   detail: string;
   equity?: number;
   need?: number;
+  /** stade du tournoi au moment de la décision */
+  stage?: string;
 }
 
 /** Actions d'une main terminée, dans l'ordre (hors blinds et antes). */
@@ -82,11 +88,16 @@ export function analyzeHand(script: HandScript, heroId: string, iterations = 500
     if (st.street === 'preflop') {
       const chart = preflopChart(st, st.toAct);
       if (!chart) return;
-      const adv = chart.advise(name);
+      // face à un tapis (ou quand plus personne ne peut payer une relance), relancer est impossible ou inutile : seul compte payer ou se coucher
+      const noRaise = !legal.canBetOrRaise;
+      const adv0 = chart.advise(name);
+      const adv: Advice = noRaise && (adv0 === 'raise' || adv0 === 'bluff') ? (adv0 === 'raise' ? 'call' : 'fold') : adv0;
       const pos = POSITION_FR[positionOf(st, st.toAct)];
+      const info = stageOf(st);
+      const stage = info ? `${info.label} · ${Math.round(effectiveBB(st, st.toAct))} BB` : undefined;
       const good = adv === kind || (adv === 'bluff' && (kind === 'raise' || kind === 'fold')) || (adv === 'call' && kind === 'check') || (adv === 'fold' && kind === 'check');
       if (good) {
-        out.push({ street: 'preflop', played, grade: 'good', title: `${name} en ${pos} : ${ADVICE_FR[adv].toLowerCase()}, bien joué.`, detail: chart.title });
+        out.push({ street: 'preflop', played, grade: 'good', title: `${name} en ${pos} : ${ADVICE_FR[adv].toLowerCase()}, bien joué.`, detail: chart.title, stage });
       } else if ((adv === 'raise' && kind === 'call') || (adv === 'call' && kind === 'raise')) {
         out.push({
           street: 'preflop',
@@ -95,18 +106,20 @@ export function analyzeHand(script: HandScript, heroId: string, iterations = 500
           tag: adv === 'raise' ? 'pre-passive' : 'pre-ambitious',
           title: adv === 'raise' ? `${name} mérite une relance plutôt qu'un simple call.` : `Relancer avec ${name} est un peu ambitieux ici.`,
           detail: `${chart.title} Conseil : ${ADVICE_FR[adv].toLowerCase()}.`,
+          stage,
         });
       } else if (kind === 'fold') {
-        out.push({ street: 'preflop', played, grade: 'mistake', tag: 'pre-tight', title: `Trop serré : ${name} se joue ici (${ADVICE_FR[adv].toLowerCase()}).`, detail: chart.detail });
+        out.push({ street: 'preflop', played, grade: 'mistake', tag: 'pre-tight', title: `Trop serré : ${name} se joue ici (${ADVICE_FR[adv].toLowerCase()}).`, detail: chart.detail, stage });
       } else {
-        out.push({ street: 'preflop', played, grade: 'mistake', tag: 'pre-loose', title: `Trop large : ${name} se couche ici depuis ${pos}.`, detail: chart.detail });
+        out.push({ street: 'preflop', played, grade: 'mistake', tag: 'pre-loose', title: `Trop large : ${name} se couche ici depuis ${pos}.`, detail: chart.detail, stage });
       }
       return;
     }
 
     // Après le flop : équité contre les mains probables des adversaires
-    const ranges = estimateRanges(st, heroId).map((r) => r.top);
+    const ranges = estimateRanges(st, heroId).map((r) => ({ top: r.top, post: r.post }));
     if (!ranges.length) return;
+    const info = stageOf(st);
     const e = equityVsRanges(hole, st.board, ranges, iterations, 17 + k);
     const fair = 1 / (ranges.length + 1);
     const pot = potTotal(st);
@@ -115,15 +128,25 @@ export function analyzeHand(script: HandScript, heroId: string, iterations = 500
     const base = `Avec ${made.toLowerCase()}, tu avais environ ${pct(e)} de chances de gagner`;
 
     if (legal.callAmount > 0) {
-      const need = legal.callAmount / (pot + legal.callAmount);
+      const chipNeed = legal.callAmount / (pot + legal.callAmount);
+      let need = chipNeed;
+      let icmNote = '';
+      const lastBet = [...st.log].reverse().find((x) => x.street === st.street && (x.type === 'bet' || x.type === 'raise'));
+      if (info && info.pressure > 0 && lastBet && legal.callAmount >= me.stack * 0.4) {
+        const price = callPrice(st, st.toAct, st.players.findIndex((p) => p.id === lastBet.playerId));
+        if (price.icm > need + 0.015) icmNote = ` ${info.label} : avec l'ICM il fallait ${pct(price.icm)} et non ${pct(need)}, car perdre ce tapis coûte plus que le doubler ne rapporte.`;
+        need = Math.max(need, price.icm);
+      }
       const implied = draws >= 8 && st.board.length === 3 ? 0.08 : draws >= 8 ? 0.04 : 0;
       if (kind === 'fold') {
-        if (e > need + 0.1) out.push({ street: st.street, played, grade: 'mistake', tag: 'fold-odds', title: 'Couché alors que la cote était bonne.', detail: `${base}, il en fallait ${pct(need)} pour suivre.`, equity: e, need });
-        else out.push({ street: st.street, played, grade: 'good', title: 'Bon abandon.', detail: `${base}, il en fallait ${pct(need)}.`, equity: e, need });
+        if (e > need + 0.1) out.push({ street: st.street, played, grade: 'mistake', tag: 'fold-odds', title: 'Couché alors que la cote était bonne.', detail: `${base}, il en fallait ${pct(need)} pour suivre.${icmNote}`, equity: e, need });
+        else out.push({ street: st.street, played, grade: 'good', title: 'Bon abandon.', detail: `${base}, il en fallait ${pct(need)}.${icmNote}`, equity: e, need });
       } else if (kind === 'call') {
-        if (e + implied < need - 0.07) out.push({ street: st.street, played, grade: 'mistake', tag: 'call-no-odds', title: 'Suivi sans la cote.', detail: `${base}, il en fallait ${pct(need)}.${draws >= 8 ? ' Même avec ton tirage, le prix était trop élevé.' : ''}`, equity: e, need });
+        if (icmNote && e + implied < need - 0.03 && e + implied >= chipNeed - 0.03)
+          out.push({ street: st.street, played, grade: 'mistake', tag: 'icm-call', title: 'Call rentable en jetons, mais trop risqué en tournoi.', detail: `${base}.${icmNote}`, equity: e, need });
+        else if (e + implied < need - 0.07) out.push({ street: st.street, played, grade: 'mistake', tag: 'call-no-odds', title: 'Suivi sans la cote.', detail: `${base}, il en fallait ${pct(need)}.${draws >= 8 ? ' Même avec ton tirage, le prix était trop élevé.' : ''}${icmNote}`, equity: e, need });
         else if (e > 0.7 && legal.canBetOrRaise) out.push({ street: st.street, played, grade: 'ok', tag: 'raise-missed', title: 'Main très forte : une relance rapportait sans doute plus.', detail: `${base}.`, equity: e, need });
-        else out.push({ street: st.street, played, grade: 'good', title: 'Suivre était rentable.', detail: `${base}, il en fallait ${pct(need)}.`, equity: e, need });
+        else out.push({ street: st.street, played, grade: 'good', title: 'Suivre était rentable.', detail: `${base}, il en fallait ${pct(need)}.${icmNote}`, equity: e, need });
       } else {
         if (e >= 0.55) out.push({ street: st.street, played, grade: 'good', title: 'Relance de valeur.', detail: `${base}.`, equity: e });
         else if (draws >= 8) out.push({ street: st.street, played, grade: 'good', title: 'Semi-bluff avec un tirage.', detail: `${base}, avec ${draws} outs pour t'améliorer.`, equity: e });
@@ -146,7 +169,11 @@ export function analyzeHand(script: HandScript, heroId: string, iterations = 500
   states.forEach((st, k) => {
     const before = out.length;
     step(st, k);
-    for (let i = before; i < out.length; i++) out[i].at = k;
+    const info = stageOf(st);
+    for (let i = before; i < out.length; i++) {
+      out[i].at = k;
+      if (info && !out[i].stage && st.toAct !== null) out[i].stage = `${info.label} · ${Math.round(effectiveBB(st, st.toAct))} BB`;
+    }
   });
   return out;
 }

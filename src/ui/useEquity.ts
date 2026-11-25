@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Card } from '../engine/cards';
 import type { EquityJob, EquityResult } from '../engine/equity.worker';
+import type { RangeSpec } from '../engine/ranges';
 
 let worker: Worker | null = null;
 let nextId = 1;
@@ -12,8 +13,8 @@ function getWorker() {
 }
 
 /** Calcule l'équité en arrière-plan, pour que l'écran reste fluide. */
-export function useEquity(hole: Card[], board: Card[], ranges: number[]) {
-  const key = `${hole.join('')}|${board.join('')}|${ranges.join(',')}`;
+export function useEquity(hole: Card[], board: Card[], ranges: RangeSpec[]) {
+  const key = `${hole.join('')}|${board.join('')}|${JSON.stringify(ranges)}`;
   const [res, setRes] = useState<{ key: string; random: number; vsRange: number } | null>(null);
   const want = useRef(key);
   useEffect(() => {

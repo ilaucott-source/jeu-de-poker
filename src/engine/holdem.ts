@@ -67,6 +67,8 @@ export interface HandConfig {
   seed: number;
   /** Nombre maximum de mises par tour en Limit (mise + relances). */
   limitCap?: number;
+  /** Tournoi : répartition des gains (parts du prix total, 1re place en premier). Absent en cash game. */
+  tourney?: { payouts: number[] };
 }
 
 export interface HandState {
