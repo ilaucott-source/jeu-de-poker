@@ -49,7 +49,7 @@ async function loadFirebase() {
   }
   return { auth, fs, a, db };
 }
-const fb = () => (fbPromise ??= loadFirebase());
+export const fb = () => (fbPromise ??= loadFirebase());
 
 const ERR_FR: Record<string, string> = {
   'auth/invalid-email': 'Adresse e-mail invalide.',
@@ -95,6 +95,8 @@ export async function signOutSync() {
 
 let uid: string | null = null;
 let started = false;
+/** Compte connecté (null si personne). */
+export const currentUid = () => uid;
 
 /** À appeler au démarrage : reconnecte le compte mémorisé et branche la synchronisation. */
 export function startSync() {

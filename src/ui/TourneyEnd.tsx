@@ -8,7 +8,7 @@ interface Props {
   hands: number;
   level: number;
   eliminated: Elimination[];
-  onReplay: () => void;
+  onReplay?: () => void;
   onQuit: () => void;
 }
 
@@ -40,8 +40,8 @@ export function TourneyEnd({ place, total, hands, level, eliminated, onReplay, o
           </ol>
         )}
         <div className="end-actions">
-          <button className="primary" onClick={onReplay}>Rejouer un tournoi</button>
-          <button onClick={onQuit}>Menu</button>
+          {onReplay && <button className="primary" onClick={onReplay}>Rejouer un tournoi</button>}
+          <button className={onReplay ? '' : 'primary'} onClick={onQuit}>Menu</button>
           <button className="ghost" onClick={() => setHidden(true)}>Voir la table</button>
         </div>
       </div>

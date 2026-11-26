@@ -1,0 +1,44 @@
+rules_version = '2';
+// Règles de sécurité Firestore du Jeu de Poker.
+// À copier dans la console Firebase : Firestore Database > Règles > Publier.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Données personnelles (mains, tournois, partie en cours) : chacun ne voit que les siennes.
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Tables entre amis : l'appareil de l'hôte distribue les cartes.
+    match /tables/{code} {
+      function signedIn() { return request.auth != null; }
+      function hostUid() { return get(/databases/$(database)/documents/tables/$(code)).data.host; }
+      function isHost() { return signedIn() && hostUid() == request.auth.uid; }
+
+      // L'état public (sans les cartes cachées) est lisible par les joueurs connectés qui ont le code.
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.host == request.auth.uid && code.size() == 6;
+      allow update: if signedIn() && resource.data.host == request.auth.uid && request.resource.data.host == resource.data.host;
+      allow delete: if signedIn() && resource.data.host == request.auth.uid;
+
+      // Arrivées et départs : chacun écrit seulement sa propre fiche.
+      match /members/{uid} {
+        allow read: if signedIn();
+        allow write: if signedIn() && request.auth.uid == uid;
+      }
+      // Actions de jeu : écrites par le joueur, lues par l'hôte.
+      match /intents/{uid} {
+        allow read: if signedIn() && (request.auth.uid == uid || isHost());
+        allow write: if signedIn() && request.auth.uid == uid;
+      }
+      // Cartes de chaque joueur : écrites par l'hôte, lisibles seulement par ce joueur (et l'hôte).
+      match /private/{uid} {
+        allow read: if signedIn() && (request.auth.uid == uid || isHost());
+        allow write: if isHost();
+      }
+      // Sauvegarde complète de la partie (paquet compris) : l'hôte seulement.
+      match /host/{doc} {
+        allow read, write: if isHost();
+      }
+    }
+  }
+}

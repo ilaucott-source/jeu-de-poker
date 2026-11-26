@@ -77,6 +77,8 @@ export interface HandConfig {
   limitCap?: number;
   /** Tournoi : répartition des gains (parts du prix total, 1re place en premier). Absent en cash game. */
   tourney?: { payouts: number[] };
+  /** Paquet imposé (sinon il est mélangé avec la graine) : sert à rejouer une main en ligne sans révéler les cartes cachées. */
+  deck?: Card[];
 }
 
 export interface HandState {
@@ -172,7 +174,7 @@ export function startHand(seats: SeatInput[], config: HandConfig): HandState {
   if (live.length < 2) throw new Error('Il faut au moins deux joueurs avec des jetons');
 
   const rng = createRng(config.seed);
-  const deck = shuffle(fullDeck(), rng);
+  const deck = config.deck ? [...config.deck] : shuffle(fullDeck(), rng);
 
   let button = config.buttonIndex;
   if (players[button].out) button = nextIndex(players, button, (p) => !p.out);

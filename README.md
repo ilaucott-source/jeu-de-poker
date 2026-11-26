@@ -14,3 +14,10 @@ npx vitest run   # tests du moteur
 Chaque envoi sur `main` lance les tests puis met le jeu en ligne sur GitHub Pages.
 
 Sons : pack « Casino Audio » de Kenney (www.kenney.nl), licence CC0 (public/sfx).
+
+## Jeu entre amis
+
+Tables privées avec un code d'invitation (`src/online`). L'appareil de l'hôte distribue les cartes et fait jouer les bots ;
+il publie un état public sans les cartes cachées (`tables/{code}`) et envoie à chaque joueur ses cartes dans un document
+que lui seul peut lire (`tables/{code}/private/{uid}`). Les règles de sécurité sont dans `firestore.rules`
+(à publier dans la console Firebase : Firestore Database > Règles).
