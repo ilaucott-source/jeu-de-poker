@@ -65,6 +65,10 @@ export function TableView({ options, onQuit, onReplay, game, online }: { options
     const t = setTimeout(() => setToast(null), 3500);
     return () => clearTimeout(t);
   }, [game.eliminated]);
+  // la table occupe tout l'écran : jamais de décalage hérité d'un autre écran (clavier iPad)
+  useEffect(() => {
+    if (window.scrollY || window.scrollX) window.scrollTo(0, 0);
+  }, []);
   const legal = hand ? legalActions(hand) : null;
   const heroTurn = hand?.toAct !== null && hand?.players[hand.toAct!]?.id === HERO_ID;
   const [muted, setMutedState] = useState(isMuted());

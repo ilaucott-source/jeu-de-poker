@@ -37,27 +37,53 @@ export function setMuted(m: boolean) {
 
 function getCtx(): AudioContext | null {
   try {
+    // sur iPhone/iPad, le son peut rester « interrompu » après un passage en arrière-plan ou un appel :
+    // on relance, et si ça ne repart pas, on recrée le moteur audio (les sons déjà chargés restent utilisables)
+    if (ctx && ctx.state === 'closed') ctx = null;
     if (!ctx) ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-    if (ctx.state === 'suspended') void ctx.resume();
+    if (ctx.state !== 'running') void ctx.resume().catch(() => undefined);
     return ctx;
   } catch {
     return null;
   }
 }
 
+function revive() {
+  const a = ctx;
+  if (!a || a.state === 'running') return;
+  void a.resume().catch(() => undefined);
+  setTimeout(() => {
+    if (ctx === a && a.state !== 'running') {
+      void a.close().catch(() => undefined);
+      ctx = null;
+      unlockAudio();
+    }
+  }, 400);
+}
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') revive();
+  });
+  window.addEventListener('pageshow', revive);
+}
+
 function load(a: AudioContext) {
   if (loading) return loading;
-  const names = Object.values(FILES).flat();
+  const names = Object.values(FILES).flat().filter((n) => !buffers.has(n));
   loading = Promise.all(
     names.map(async (n) => {
       try {
         const res = await fetch(`./sfx/${n}.mp3`);
+        if (!res.ok) return;
         buffers.set(n, await a.decodeAudioData(await res.arrayBuffer()));
       } catch {
         /* un son manquant ne doit pas bloquer le jeu */
       }
     }),
-  ).then(() => undefined);
+  ).then(() => {
+    // sons manquants (réseau coupé, mise à jour en cours…) : on réessaiera au prochain son
+    if (buffers.size < Object.values(FILES).flat().length) setTimeout(() => (loading = null), 5000);
+  });
   return loading;
 }
 
@@ -65,6 +91,7 @@ function load(a: AudioContext) {
 export function unlockAudio() {
   const a = getCtx();
   if (!a) return;
+  if (a.state !== 'running') revive();
   void load(a);
   const s = a.createBufferSource();
   s.buffer = a.createBuffer(1, 1, 22050);
