@@ -25,8 +25,33 @@ const GAME_SHORT = { holdem: '', omaha: 'Omaha ', draw27: '2-7 Triple Draw · ' 
 const ACTION_FR: Record<string, string> = { fold: 'Couché', check: 'Parole', call: 'Suit', bet: 'Mise', raise: 'Relance', post: 'Blind', draw: 'Change' };
 const DRAW_STAGE = { preflop: 'Avant le 1er tirage', flop: '1er tirage', turn: '2e tirage', river: '3e et dernier tirage' } as Record<string, string>;
 
+export type TableGame = ReturnType<typeof useCashGame>;
+
+/** Infos en plus quand la table se joue entre amis. */
+export interface OnlineTableInfo {
+  code: string;
+  isHost: boolean;
+  nextDealAt: number | null;
+  paused: boolean;
+  setPaused: (p: boolean) => void;
+  /** l'hôte joue pour ce joueur (il n'a pas répondu à temps) */
+  away: boolean;
+  back: () => void;
+  hostAway: boolean;
+  hostName: string;
+  error: string | null;
+  /** sièges absents */
+  awayIds: string[];
+  /** ce joueur attend une place (arrivé en cours de partie) */
+  spectator: boolean;
+}
+
 export function Table({ options, onQuit, onReplay, resume }: { options: CashGameOptions; onQuit: () => void; onReplay: () => void; resume?: SavedGame | null }) {
   const game = useCashGame(options, resume);
+  return <TableView options={options} onQuit={onQuit} onReplay={onReplay} game={game} />;
+}
+
+export function TableView({ options, onQuit, onReplay, game, online }: { options: CashGameOptions; onQuit: () => void; onReplay: () => void; game: TableGame; online?: OnlineTableInfo }) {
   const { hand, handNo, deal, act, rebuy, heroStack } = game;
   const tourney = options.mode === 'tournament';
   const [toast, setToast] = useState<string | null>(null);
@@ -202,6 +227,7 @@ export function Table({ options, onQuit, onReplay, resume }: { options: CashGame
           )}
           {timer.enabled && <span className="bank"> · Banque {Math.ceil(timer.bank)} s</span>}
         </span>
+        {online && <span className="pill table-code" title="Code de la table">Table {online.code}</span>}
         <span className="top-right">
           <button className={`pill stats-btn ${showOdds ? 'on' : ''}`} onClick={toggleOdds} aria-pressed={showOdds}>
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 14V9h3v5zm4.5 0V5h3v9zM11 14V2h3v12z" fill="currentColor" /></svg>
@@ -244,7 +270,7 @@ export function Table({ options, onQuit, onReplay, resume }: { options: CashGame
                 <div className="plate-row">
                 <ChipStack amount={p.stack} unit={unit} mode="stack" small={compact} />
                 <div className="plate">
-                  {avatarFor(p.name) ? <img className="avatar" src={avatarFor(p.name)!} alt="" /> : <div className="avatar me">♠</div>}
+                  {avatarFor(p.name) && !(online && !p.id.startsWith('bot')) ? <img className="avatar" src={avatarFor(p.name)!} alt="" /> : online && !isHero ? <div className="avatar me friend">{p.name.trim().charAt(0).toUpperCase() || '♠'}</div> : <div className="avatar me">♠</div>}
                   <div className="name">{p.name}</div>
                   {hand!.toAct === i && !isHero && <span className="thinking" aria-label="réfléchit"><i /><i /><i /></span>}
                   <div className="stack">{p.stack}</div>
@@ -256,6 +282,7 @@ export function Table({ options, onQuit, onReplay, resume }: { options: CashGame
                 </div>
                 </div>
                 {p.out && <div className="last k-out">Éliminé</div>}
+                {online?.awayIds.includes(p.id) && !p.out && <div className="last k-away">Absent</div>}
                 {p.allIn && !p.folded && <div className="last allin-tag">TAPIS</div>}
                 {lastAction.text[p.id] && !won && !(p.allIn && !p.folded) && <div className={`last k-${lastAction.kind[p.id]}`}>{lastAction.text[p.id]}</div>}
                 {won > 0 && <div className="last win">+{won}</div>}
@@ -303,12 +330,17 @@ export function Table({ options, onQuit, onReplay, resume }: { options: CashGame
 
       {toast && <div className="toast" role="status">{toast}</div>}
       {tourney && game.tourneyOver && game.heroPlace && (!hand || hand.street === 'complete') && (
-        <TourneyEnd place={game.heroPlace} total={game.total} hands={handNo} level={game.levelIndex + 1} eliminated={game.eliminated} onReplay={onReplay} onQuit={onQuit} />
+        <TourneyEnd place={game.heroPlace} total={game.total} hands={handNo} level={game.levelIndex + 1} eliminated={game.eliminated} onReplay={online ? undefined : onReplay} onQuit={onQuit} />
       )}
 
       {review && <HandReview record={review} onClose={() => setReview(null)} />}
+      {online && <OnlineBanner online={online} />}
       <footer className="actions">
-        {done ? (
+        {done && online ? (
+          <OnlineNext online={online} canReview={!!(game.lastRecordId && hand)} onReview={() => setReview(loadHands().find((h) => h.id === game.lastRecordId) ?? null)} onDeal={deal} over={tourney && game.tourneyOver} />
+        ) : online?.spectator ? (
+          <span className="waiting">Tu prendras place à la prochaine main.</span>
+        ) : done ? (
           tourney && game.tourneyOver ? (
             <button className="primary" onClick={onReplay}>Rejouer un tournoi</button>
           ) : heroStack <= 0 && !tourney ? (
@@ -339,4 +371,50 @@ export function Table({ options, onQuit, onReplay, resume }: { options: CashGame
 function drawsDone(street: string, drawing: boolean): number {
   const base = { preflop: 0, flop: 1, turn: 2, river: 3, showdown: 3, complete: 3 }[street] ?? 0;
   return drawing ? base - 0.5 : base;
+}
+
+/** Bandeaux du jeu entre amis : absence du joueur, de l'hôte, problème de connexion. */
+function OnlineBanner({ online }: { online: OnlineTableInfo }) {
+  if (online.away)
+    return (
+      <div className="online-banner" role="status">
+        Tu n’as pas joué à temps : on joue pour toi (parole ou couché).
+        <button className="primary" onClick={online.back}>Je suis là</button>
+      </div>
+    );
+  if (online.hostAway) return <div className="online-banner" role="status">{online.hostName || 'L’hôte'} s’est absenté : la partie reprendra dès son retour.</div>;
+  if (online.error) return <div className="online-banner" role="status">{online.error}</div>;
+  return null;
+}
+
+function OnlineNext({ online, canReview, onReview, onDeal, over }: { online: OnlineTableInfo; canReview: boolean; onReview: () => void; onDeal: () => void; over: boolean }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(id);
+  }, []);
+  const left = online.nextDealAt ? Math.max(0, Math.ceil((online.nextDealAt - now) / 1000)) : null;
+  return (
+    <div className="done-actions">
+      {canReview && (
+        <button className="pill review-btn" onClick={onReview}>
+          Analyse de la main
+        </button>
+      )}
+      {over ? (
+        <span className="waiting">Partie terminée.</span>
+      ) : online.isHost ? (
+        <>
+          <button className="pill" onClick={() => online.setPaused(!online.paused)} aria-pressed={online.paused}>
+            {online.paused ? '▶ Reprendre' : '❚❚ Pause'}
+          </button>
+          <button className="primary" onClick={onDeal}>
+            Main suivante{left !== null && !online.paused ? ` (${left} s)` : ''}
+          </button>
+        </>
+      ) : (
+        <span className="waiting">{online.paused ? `${online.hostName || 'L’hôte'} a mis la partie en pause.` : left !== null ? `Main suivante dans ${left} s` : 'Main suivante dans un instant…'}</span>
+      )}
+    </div>
+  );
 }

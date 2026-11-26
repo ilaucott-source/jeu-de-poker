@@ -8,6 +8,7 @@ import { Table } from './ui/Table';
 import { Progress } from './ui/Progress';
 import { Calculator } from './ui/Calculator';
 import { SyncPanel } from './ui/SyncPanel';
+import { OnlineScreen } from './ui/OnlineScreen';
 import { startSync, syncAvailable, useSyncStatus } from './sync/cloud';
 import { clearGame, loadGame, onSaveChange, type SavedGame } from './game/save';
 import { PACE, type BotPace } from './engine/thinking';
@@ -47,6 +48,17 @@ export default function App() {
   const [progress, setProgress] = useState(false);
   const [calc, setCalc] = useState(false);
   const [syncOpen, setSyncOpen] = useState(false);
+  // lien d'invitation : ?table=CODE ouvre directement l'écran « entre amis »
+  const [inviteCode] = useState(() => {
+    try {
+      const c = new URLSearchParams(location.search).get('table');
+      if (c) history.replaceState(null, '', location.pathname);
+      return c;
+    } catch {
+      return null;
+    }
+  });
+  const [online, setOnline] = useState(!!inviteCode && syncAvailable);
   const sync = useSyncStatus();
   useEffect(() => startSync(), []);
   const [saved, setSaved] = useState<SavedGame | null>(() => loadGame());
@@ -78,6 +90,7 @@ export default function App() {
         }}
       />
     );
+  if (online) return <OnlineScreen opts={opts} initialCode={inviteCode} onClose={() => setOnline(false)} />;
   if (progress) return <Progress onClose={() => setProgress(false)} />;
   if (calc) return <Calculator onClose={() => setCalc(false)} />;
   const tourney = opts.mode === 'tournament';
@@ -219,6 +232,11 @@ export default function App() {
         >
           {saved ? 'Nouvelle partie' : 'Jouer'}
         </button>
+        {syncAvailable && (
+          <button className="progress-link friends-link" onClick={() => setOnline(true)}>
+            ♣ Jouer avec des amis · table privée avec un code
+          </button>
+        )}
         <button className="progress-link" onClick={() => setProgress(true)}>Ma progression · statistiques et analyse des mains</button>
         <button className="progress-link" onClick={() => setCalc(true)}>Calculateur de probabilités</button>
         {syncAvailable && (
